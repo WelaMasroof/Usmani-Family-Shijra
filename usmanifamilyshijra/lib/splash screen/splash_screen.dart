@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-
+import '../Graph/forcedirectedgraph.dart';
 import '../Graph/graph_page.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -34,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen>
     Timer(const Duration(seconds: 3), () {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const GraphPage()),
+        MaterialPageRoute(builder: (_) => const FamilyTreeGraph()),
       );
     });
   }
