@@ -1,5 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+Future<ValueNotifier<GraphQLClient>> initGraphQLClient() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('jwt');
+
+  final authLink = AuthLink(
+    getToken: () async => 'Bearer $token',
+  );
+
+  final httpLink = HttpLink('http://127.0.0.1:8000/graphql'); // Update IP if needed
+
+  final link = authLink.concat(httpLink);
+
+  return ValueNotifier(
+    GraphQLClient(
+      link: link,
+      cache: GraphQLCache(store: InMemoryStore()),
+    ),
+  );
+}
 
 class AddPersonPage extends StatefulWidget {
   const AddPersonPage({Key? key}) : super(key: key);
@@ -10,14 +32,13 @@ class AddPersonPage extends StatefulWidget {
 
 class _AddPersonPageState extends State<AddPersonPage> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _fatherNameController = TextEditingController();
+  final _grandfatherNameController = TextEditingController();
+  final _motherNameController = TextEditingController();
 
-  String name = '';
   String gender = 'male';
-  String fatherName = '';
-  String grandfatherName = '';
-  String? motherName;
-
-  String? _errorMessage; // holds the latest error
+  bool _isSubmitting = false;
 
   final String createPersonMutation = """
     mutation CreatePerson(\$person: PersonInput!) {
@@ -27,6 +48,39 @@ class _AddPersonPageState extends State<AddPersonPage> {
       }
     }
   """;
+
+  void _showResultDialog(String title, String message, {bool isError = false}) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(isError ? Icons.error : Icons.check_circle,
+                color: isError ? Colors.red : Colors.green),
+            const SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (!isError) {
+                // Clear form on success
+                _formKey.currentState?.reset();
+                _nameController.clear();
+                _fatherNameController.clear();
+                _grandfatherNameController.clear();
+                _motherNameController.clear();
+              }
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,131 +92,118 @@ class _AddPersonPageState extends State<AddPersonPage> {
           options: MutationOptions(
             document: gql(createPersonMutation),
             onCompleted: (dynamic resultData) {
-              setState(() {
-                _errorMessage = null;
-              });
+              if (!mounted) return;
+              setState(() => _isSubmitting = false);
 
               final person = resultData?['createPerson'];
-              final id = person?['id'] ?? 'N/A';
-              final name = person?['name'] ?? 'N/A';
+              if (person != null) {
+                _showResultDialog(
+                  "Person Added",
+                  "Person was successfully added.\n\nID: ${person['id'] ?? 'N/A'}\nName: ${person['name'] ?? 'N/A'}",
+                );
+              }
 
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Person Added'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('✅ Person was successfully added.'),
-                      const SizedBox(height: 8),
-                      Text('🆔 ID: $id'),
-                      Text('👤 Name: $name'),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              );
             },
             onError: (error) {
-              final message = error?.graphqlErrors.isNotEmpty == true
-                  ? error!.graphqlErrors.first.message
-                  : error?.linkException?.originalException?.toString() ?? "Unknown error";
+              if (!mounted) return;
+              setState(() => _isSubmitting = false);
 
-              setState(() {
-                _errorMessage = message;
-              });
+              String errorMessage = "An unknown error occurred";
+              if (error != null) {
+                if (error.graphqlErrors.isNotEmpty) {
+                  // Extract the meaningful part of the error message
+                  errorMessage = error.graphqlErrors.first.message;
+                  if (errorMessage.contains("Exception: ")) {
+                    errorMessage = errorMessage.split("Exception: ").last;
+                  }
+                } else if (error.linkException != null) {
+                  errorMessage = error.linkException.toString();
+                }
+              }
+
+              _showResultDialog(
+                "Error",
+                errorMessage,
+                isError: true,
+              );
             },
           ),
           builder: (RunMutation runMutation, QueryResult? result) {
-            return Column(
-              children: [
-                if (_errorMessage != null)
-                  ExpansionTile(
-                    initiallyExpanded: true,
-                    title: const Text('❌ Error Occurred', style: TextStyle(color: Colors.red)),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(color: Colors.redAccent),
-                        ),
-                      ),
+            return Form(
+              key: _formKey,
+              child: ListView(
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: "Name"),
+                    validator: (val) => val!.isEmpty ? "Required" : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: "Gender"),
+                    value: gender,
+                    items: const [
+                      DropdownMenuItem(value: 'male', child: Text('Male')),
+                      DropdownMenuItem(value: 'female', child: Text('Female')),
                     ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => gender = value);
+                    },
                   ),
-                Expanded(
-                  child: Form(
-                    key: _formKey,
-                    child: ListView(
-                      children: [
-                        TextFormField(
-                          decoration: const InputDecoration(labelText: "Name"),
-                          onSaved: (val) => name = val!,
-                          validator: (val) => val!.isEmpty ? "Required" : null,
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(labelText: "Gender"),
-                          value: gender,
-                          items: const [
-                            DropdownMenuItem(value: 'male', child: Text('Male')),
-                            DropdownMenuItem(value: 'female', child: Text('Female')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) setState(() => gender = value);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          decoration: const InputDecoration(labelText: "Father's Name"),
-                          onSaved: (val) => fatherName = val!,
-                          validator: (val) => val!.isEmpty ? "Required" : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          decoration: const InputDecoration(labelText: "Grandfather's Name"),
-                          onSaved: (val) => grandfatherName = val!,
-                          validator: (val) => val!.isEmpty ? "Required" : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          decoration: const InputDecoration(labelText: "Mother's Name (optional)"),
-                          onSaved: (val) => motherName = val,
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: () {
-                            if (_formKey.currentState!.validate()) {
-                              _formKey.currentState!.save();
-
-                              runMutation({
-                                "person": {
-                                  "name": name,
-                                  "gender": gender,
-                                  "fatherName": fatherName,
-                                  "grandfatherName": grandfatherName,
-                                  "motherName": motherName,
-                                }
-                              });
-                            }
-                          },
-                          child: const Text("Add Person"),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _fatherNameController,
+                    decoration: const InputDecoration(labelText: "Father's Name"),
+                    validator: (val) => val!.isEmpty ? "Required" : null,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _grandfatherNameController,
+                    decoration: const InputDecoration(labelText: "Grandfather's Name"),
+                    validator: (val) => val!.isEmpty ? "Required" : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _motherNameController,
+                    decoration: const InputDecoration(labelText: "Mother's Name (optional)"),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _isSubmitting ? null : () {
+                      if (_formKey.currentState!.validate()) {
+                        setState(() => _isSubmitting = true);
+                        runMutation({
+                          "person": {
+                            "name": _nameController.text,
+                            "gender": gender,
+                            "fatherName": _fatherNameController.text,
+                            "grandfatherName": _grandfatherNameController.text,
+                            "motherName": _motherNameController.text.isNotEmpty
+                                ? _motherNameController.text
+                                : null,
+                          }
+                        });
+                      }
+                    },
+                    child: _isSubmitting
+                        ? const CircularProgressIndicator()
+                        : const Text("Add Person"),
+                  ),
+                ],
+              ),
             );
           },
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _fatherNameController.dispose();
+    _grandfatherNameController.dispose();
+    _motherNameController.dispose();
+    super.dispose();
   }
 }
