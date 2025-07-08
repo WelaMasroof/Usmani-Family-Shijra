@@ -2,8 +2,11 @@ import strawberry
 from typing import List, Optional
 from api.db import get_session
 import Levenshtein
-
-# Input for creating a person
+from api.auth import get_current_user
+from fastapi import Depends
+from strawberry.permission import BasePermission
+from strawberry.types import Info 
+from jose import jwt, JWTError# Input for creating a person
 @strawberry.input
 class PersonInput:
     name: str
@@ -38,6 +41,15 @@ class Ancestor:
     grandfather_name: str
     mother_name: Optional[str]
 
+class IsAuthenticated(BasePermission):
+    async def has_permission(self, source, info: Info, **kwargs) -> bool:
+        request = info.context["request"]
+        token = request.headers.get("authorization", "").replace("Bearer ", "")
+        try:
+            jwt.decode(token, "YOUR_SECRET_KEY", algorithms=["HS256"])
+            return True  # ✅ Valid JWT
+        except JWTError:
+            return False  # ❌ Block request
 @strawberry.type
 class Query:
     @strawberry.field
@@ -84,9 +96,11 @@ RETURN DISTINCT n
 # Mutation class
 @strawberry.type
 class Mutation:
-    @strawberry.mutation
-    def create_person(self, person: PersonInput) -> Person:
+    @strawberry.mutation(permission_classes=[IsAuthenticated]) 
+    async def create_person(self, person: PersonInput) -> Person:
+        """Create a new person (requires admin JWT)"""
         with get_session() as session:
+            # Verify father exists
             father_result = session.run("""
                 MATCH (f:Person)
                 WHERE toLower(f.name) = toLower($father_name)
@@ -97,6 +111,7 @@ class Mutation:
             if not father_record:
                 raise Exception(f"Father '{person.father_name}' not found")
             
+            # Verify grandfather consistency
             father_node = father_record["f"]
             actual_grandfather = father_node.get("father_name")
 
@@ -105,6 +120,7 @@ class Mutation:
             if actual_grandfather.lower() != person.grandfather_name.lower():
                 raise Exception(f"Grandfather mismatch: Expected '{actual_grandfather}', got '{person.grandfather_name}'")
 
+            # Check for similar names
             similar_name_result = session.run("""
                 MATCH (p:Person)
                 WHERE toLower(p.father_name) = toLower($father_name)
@@ -117,6 +133,7 @@ class Mutation:
                 if distance <= 2:
                     raise Exception(f"A similar person '{existing_name}' already exists with the same father name")
 
+            # Create the new person
             result = session.run("""
                 CREATE (p:Person {
                     id: randomUUID(),
@@ -137,6 +154,7 @@ class Mutation:
 
             created = result.single()["p"]
 
+            # Create relationship
             relation = "SON_OF" if person.gender.lower() in ["male", "m"] else "DAUGHTER_OF"
             session.run(f"""
                 MATCH (child:Person)
@@ -157,7 +175,6 @@ class Mutation:
                 grandfather_name=created["grandfather_name"],
                 mother_name=created.get("mother_name")
             )
-
     @strawberry.mutation
     def delete_person(self, person: DeletePersonInput) -> str:
         with get_session() as session:
