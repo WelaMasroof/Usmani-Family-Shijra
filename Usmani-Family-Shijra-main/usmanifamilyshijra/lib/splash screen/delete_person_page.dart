@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
 import 'package:jwt_decode/jwt_decode.dart';
-=======
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
 
 class DeletePersonPage extends StatefulWidget {
   const DeletePersonPage({Key? key}) : super(key: key);
@@ -26,10 +23,7 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
   String? fatherName;
 
   String? _jwtToken;
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
   String? _userRole;
-=======
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
   bool _isLoading = true;
   bool _isSubmitting = false;
   bool _dialogShown = false;
@@ -58,7 +52,6 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
   }
 
   Future<void> _initializeAuth() async {
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
     final token = await _storage.read(key: 'admin_token') ?? await _storage.read(key: 'jwt_token');
     String? role;
 
@@ -82,37 +75,15 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
     setState(() {
       _jwtToken = token;
       _userRole = role;
-=======
-    final token = await _storage.read(key: 'jwt_token');
-    if (token == null) {
-      _redirectToLogin();
-      return;
-    }
-    setState(() {
-      _jwtToken = token;
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
       _isLoading = false;
     });
   }
 
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
-=======
-  void _redirectToLogin() {
-    Navigator.pushReplacementNamed(context, '/login');
-  }
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
 
   Future<void> _submitForm(RunMutation runMutation) async {
     if (!_formKey.currentState!.validate()) return;
 
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
     setState(() => _isSubmitting = true);
-=======
-    setState(() {
-      _isSubmitting = true;
-    });
-
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
     _formKey.currentState!.save();
 
     runMutation({
@@ -141,7 +112,6 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
     if (_jwtToken == null || _userRole != 'admin') {
       return Scaffold(
         appBar: AppBar(title: const Text("Delete Family Member")),
@@ -149,20 +119,6 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
           child: Text(
             '🚫 Access Denied: Only Admins Can Delete',
             style: TextStyle(color: Colors.red, fontSize: 18),
-=======
-    if (_jwtToken == null) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('authentication required'),
-              TextButton(
-                onPressed: _redirectToLogin,
-                child: const Text('go to login'),
-              ),
-            ],
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
           ),
         ),
       );
@@ -172,25 +128,16 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
       client: ValueNotifier(_buildClient()),
       child: Scaffold(
         appBar: AppBar(
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
           title: const Text("Delete Family Member"),
-=======
-          title: const Text("delete family member"),
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
           actions: [
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: () async {
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
                 await _storage.delete(key: 'admin_token');
                 setState(() {
                   _jwtToken = null;
                   _userRole = null;
                 });
-=======
-                await _storage.delete(key: 'jwt_token');
-                _redirectToLogin();
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
               },
             ),
           ],
@@ -208,51 +155,29 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
               },
             ),
             builder: (RunMutation runMutation, QueryResult? result) {
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
               if (!_dialogShown &&
                   result != null &&
                   (result.data != null || result.hasException)) {
                 _dialogShown = true;
 
                 String message = 'Unknown response';
-=======
-              if (!_dialogShown && result != null && (result.data != null || result.hasException)) {
-                _dialogShown = true;
-
-                String message = 'unknown response';
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
 
                 if (result.hasException) {
                   message = result.exception!.graphqlErrors.isNotEmpty
                       ? result.exception!.graphqlErrors.first.message
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
                       : result.exception!.linkException?.originalException?.toString() ?? 'Unknown error';
                 } else {
                   final msg = result.data?['deletePerson'] ?? 'No response';
                   message = msg.toString();
 
-=======
-                      : result.exception!.linkException?.originalException?.toString()
-                      ?? 'unknown error';
-                } else {
-                  final success = result.data?['deletePerson'];
-                  message = success == true
-                      ? 'person deleted successfully'
-                      : 'no matching person found to delete.';
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
                 }
 
                 Future.microtask(() {
                   showDialog(
                     context: context,
                     builder: (_) => AlertDialog(
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
                       title: const Text('Status'),
                       content: Text(message),
-=======
-                      title: const Text('status'),
-                      content: Text(message), // <- shows exact error message
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
                       actions: [
                         TextButton(
                           onPressed: () {
@@ -265,11 +190,7 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
                             }
                             setState(() => _dialogShown = false);
                           },
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
                           child: const Text('OK'),
-=======
-                          child: const Text('ok'),
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
                         ),
                       ],
                     ),
@@ -277,10 +198,6 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
                 });
               }
 
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
-=======
-
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
               return Form(
                 key: _formKey,
                 child: ListView(
@@ -313,15 +230,9 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
     return TextFormField(
       controller: _idController,
       decoration: const InputDecoration(
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         labelText: "Person ID (optional)",
         border: OutlineInputBorder(),
         helperText: "Provide ID or both name and father's name",
-=======
-        labelText: "person id (optional)",
-        border: OutlineInputBorder(),
-        helperText: "either provide id or both name and father's name",
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
       ),
       enabled: _nameController.text.isEmpty && _fatherNameController.text.isEmpty,
       onSaved: (val) => id = val?.isNotEmpty == true ? val : null,
@@ -332,21 +243,13 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
     return TextFormField(
       controller: _nameController,
       decoration: const InputDecoration(
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         labelText: "Name (required if no ID)",
-=======
-        labelText: "name (required if no id)",
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         border: OutlineInputBorder(),
       ),
       enabled: _idController.text.isEmpty,
       validator: (val) {
         if (_idController.text.isEmpty && val!.isEmpty) {
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
           return "Required when no ID is provided";
-=======
-          return "required when no id provided";
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         }
         return null;
       },
@@ -358,21 +261,13 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
     return TextFormField(
       controller: _fatherNameController,
       decoration: const InputDecoration(
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         labelText: "Father's Name (required if no ID)",
-=======
-        labelText: "father's name (required if no id)",
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         border: OutlineInputBorder(),
       ),
       enabled: _idController.text.isEmpty,
       validator: (val) {
         if (_idController.text.isEmpty && val!.isEmpty) {
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
           return "Required when no ID is provided";
-=======
-          return "required when no id provided";
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         }
         return null;
       },
@@ -398,11 +293,7 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
         ),
       )
           : const Text(
-<<<<<<< HEAD:usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         'Delete Family Member',
-=======
-        'delete family member',
->>>>>>> 27dbb7915aed38a1b41836660e5d68b2b8e275d8:Usmani-Family-Shijra-main/usmanifamilyshijra/lib/splash screen/delete_person_page.dart
         style: TextStyle(fontSize: 16, color: Colors.white),
       ),
     );

@@ -1,32 +1,62 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'splash screen/login.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:usmaifamilyshijra/splash%20screen/delete_person_page.dart';
+import 'package:usmaifamilyshijra/splash%20screen/login%20page.dart';
+import 'package:usmaifamilyshijra/splash%20screen/splash_screen.dart';
+import 'Graph/forcedirectedgraph.dart';
 import 'splash screen/add_person_page.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  const storage = FlutterSecureStorage();
-  final token = await storage.read(key: 'jwt_token');
+  await initHiveForFlutter(); // important for caching
 
-  print("Token at startup: $token");
-  runApp(MyApp(initialRoute: token != null ? '/add-person' : '/login'));
+  final client = await initGraphQLClient(); // 🔥 JWT-aware client
+  runApp(GraphQLProvider(client: client, child: const ShijraApp()));
 }
 
-class MyApp extends StatelessWidget {
-  final String initialRoute;
+// 🔐 Function to initialize GraphQL client with AuthLink
+Future<ValueNotifier<GraphQLClient>> initGraphQLClient() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('jwt');
 
-  const MyApp({Key? key, required this.initialRoute}) : super(key: key);
+  final authLink = AuthLink(
+    getToken: () async => token != null ? 'Bearer $token' : null,
+  );
+
+  final httpLink = HttpLink('http://localhost:8000/graphql'); // change to IP on real device
+
+  final link = authLink.concat(httpLink); // 💥 combine auth + http links
+
+  return ValueNotifier(
+    GraphQLClient(
+      link: link,
+      cache: GraphQLCache(store: HiveStore()),
+    ),
+  );
+}
+
+class ShijraApp extends StatelessWidget {
+  const ShijraApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Admin App',
-      initialRoute: initialRoute,
-      routes: {
-        '/login': (context) => LoginScreen(),
-        '/add-person': (context) => AddPersonPage(),
-      },
+      title: 'Usmani Family Shijra',
+      theme: ThemeData(
+        primarySwatch: Colors.indigo,
+        fontFamily: 'Roboto',
+      ),
       debugShowCheckedModeBanner: false,
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const FamilyTreeGraph(),
+        '/add': (context) => const AddPersonPage(),
+        '/splash': (context) => const SplashScreen(),
+        '/delete': (context) => const DeletePersonPage(),
+        '/login': (context) => const LoginPage(),
+
+      },
     );
   }
 }
