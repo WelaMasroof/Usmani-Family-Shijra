@@ -3,11 +3,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_force_directed_graph/flutter_force_directed_graph.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:usmaifamilyshijra/splash%20screen/login%20page.dart';
 import '../API/api_service.dart';
 import '../models/person.dart';
 import 'package:pdf/pdf.dart';
+
 
 class FamilyTreeGraph extends StatefulWidget {
   const FamilyTreeGraph({super.key});
@@ -16,12 +19,14 @@ class FamilyTreeGraph extends StatefulWidget {
   State<FamilyTreeGraph> createState() => _FamilyTreeGraphState();
 }
 
+
 class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
+
   late final ForceDirectedGraphController<String> _controller;
   final GlobalKey _graphKey = GlobalKey();
   final Map<String, Person> _personMap = {};
   final Set<String> _addedNodes = {};
-  final Set<String> _highlightedNodes = {}; // ✅ FIX: declare this!
+  final Set<String> _highlightedNodes = {};
   bool _loading = true;
 
   final List<Color> generationColors = [
@@ -36,11 +41,27 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
     Colors.indigo,
   ];
 
+  bool  _isAdmin = false;
+
   @override
   void initState() {
     super.initState();
     _controller = ForceDirectedGraphController<String>();
-    _loadFamilyTree();
+    _checkIfAdmin().then((_) {
+      _loadFamilyTree();
+    });
+  }
+
+
+  Future<void> _checkIfAdmin() async {
+    final storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'admin_token');
+    if (token != null) {
+      // You may also decode and check token content here
+      setState(() {
+        _isAdmin = true;
+      });
+    }
   }
 
   @override
@@ -54,17 +75,29 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
       final persons = await ApiService.fetchPersons();
 
       for (final person in persons) {
-        _personMap[person.name] = person;
-        if (!_addedNodes.contains(person.name)) {
-          _controller.addNode(person.name);
-          _addedNodes.add(person.name);
+        final normalizedName = person.name.trim().toLowerCase();
+        _personMap[normalizedName] = person;
+
+        if (!_addedNodes.contains(normalizedName)) {
+          _controller.addNode(normalizedName);
+          _addedNodes.add(normalizedName);
         }
       }
 
       for (final person in persons) {
-        final father = person.fatherName.trim();
-        if (father.isNotEmpty && _addedNodes.contains(father)) {
-          _controller.addEdgeByData(father, person.name);
+        final childName = person.name.trim();
+        final childKey = childName.toLowerCase();
+
+        final fatherName = person.fatherName.trim();
+        final fatherKey = fatherName.toLowerCase();
+
+        if (fatherName.isNotEmpty) {
+          if (!_addedNodes.contains(fatherKey)) {
+            _controller.addNode(fatherKey);
+            _addedNodes.add(fatherKey);
+          }
+
+          _controller.addEdgeByData(fatherKey, childKey);
         }
       }
 
@@ -79,16 +112,18 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
 
   int _calculateGeneration(String name) {
     int generation = 0;
-    String? currentName = name;
+    String? currentName = name.toLowerCase();
 
     while (currentName != null &&
         _personMap[currentName]?.fatherName.trim().isNotEmpty == true) {
+      final fatherName = _personMap[currentName]!.fatherName.trim().toLowerCase();
+      currentName = fatherName;
       generation++;
-      currentName = _personMap[currentName]?.fatherName.trim();
     }
 
     return generation;
   }
+
 
   String _getShortName(String fullName) {
     final parts = fullName.split(' ');
@@ -99,17 +134,21 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
   }
 
   Widget _nodeBuilder(BuildContext context, String name) {
-    final generation = _calculateGeneration(name);
+    final person = _personMap[name.toLowerCase()];
+    if (person == null) return const SizedBox();
+
+    final generation = _calculateGeneration(name.toLowerCase());
     final color = generation < generationColors.length
         ? generationColors[generation]
         : Colors.grey;
+
     final isRoot = generation == 0;
-    final isHighlighted = _highlightedNodes.contains(name);
+    final isHighlighted = _highlightedNodes.contains(name.toLowerCase());
 
     return GestureDetector(
-      onTap: () => _showPersonDetails(context, _personMap[name]!),
+      onTap: () => _showPersonDetails(context, person),
       child: Tooltip(
-        message: name,
+        message: person.name,
         child: Container(
           width: isRoot ? 80 : 60,
           height: isRoot ? 80 : 60,
@@ -132,7 +171,7 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
           ),
           child: Center(
             child: Text(
-              _getShortName(name),
+              _getShortName(person.name),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
@@ -145,6 +184,7 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
       ),
     );
   }
+
 
   void _showPersonDetails(BuildContext context, Person person) {
     showDialog(
@@ -207,24 +247,6 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
         title: const Text('Usmani Family Tree'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () async {
-              final result = await showSearch(
-                context: context,
-                delegate: FamilyMemberSearchDelegate(_personMap.keys.toList()),
-              );
-              if (result != null && _addedNodes.contains(result)) {
-                _highlightedNodes.clear();
-                _highlightedNodes.add(result);
-                setState(() {});
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.print),
-            onPressed: _exportGraphAsPdf,
-          ),
-          IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () => showDialog(
               context: context,
@@ -250,6 +272,92 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
           ),
         ],
       ),
+
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text(
+                'Menu',
+                style: TextStyle(color: Colors.white, fontSize: 24),
+              ),
+            ),
+
+            ListTile(
+              leading: const Icon(Icons.search),
+              title: const Text('Search Family Member'),
+              onTap: () async {
+                Navigator.pop(context);
+                final result = await showSearch(
+                  context: context,
+                  delegate: FamilyMemberSearchDelegate(_personMap.keys.toList()),
+                );
+                if (result != null && _addedNodes.contains(result.toLowerCase())) {
+                  _highlightedNodes.clear();
+                  _highlightedNodes.add(result.toLowerCase());
+                  setState(() {});
+                }
+              },
+            ),
+
+            ListTile(
+              leading: const Icon(Icons.print),
+              title: const Text('Export as PDF'),
+              onTap: () {
+                Navigator.pop(context);
+                _exportGraphAsPdf();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.login_outlined),
+              title: const Text('Login'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/login');
+              },
+            ),
+
+            if ( _isAdmin) ...[
+              ListTile(
+                leading: const Icon(Icons.group_add),
+                title: const Text('Add Family Member'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/add'); // 🚀 Navigate to AddPersonPage
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_sharp),
+                title: const Text('Delete Family Member'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/delete');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout_outlined),
+                title: const Text('Logout'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final storage = FlutterSecureStorage();
+                  await storage.delete(key: 'admin_token');
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
+                },
+              ),
+
+
+            ],
+          ],
+        ),
+      ),
+
+
+
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RepaintBoundary(
@@ -266,6 +374,7 @@ class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
       ),
     );
   }
+
 
   Widget _buildColorLegend(String text, Color color) {
     return Padding(
