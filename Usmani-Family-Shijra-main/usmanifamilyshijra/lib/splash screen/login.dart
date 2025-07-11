@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8080/token'), // Android emulator URL
+        Uri.parse('http://127.0.0.1:8000/token'), // Android emulator URL
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: 'username=${_usernameController.text}&password=${_passwordController.text}',
       );
