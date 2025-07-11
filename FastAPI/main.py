@@ -6,13 +6,13 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
 from strawberry.fastapi import GraphQLRouter
-from api.schema import schema
+from schema import schema
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 # ===== JWT Configuration =====
-SECRET_KEY = os.getenv("JWT_SECRET", "YOUR_SECRET_KEY")  # Change in production!
+SECRET_KEY = os.getenv("JWT_SECRET", "ABC")  # Change in production!
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 5
+ACCESS_TOKEN_EXPIRE_MINUTES = 10
 
 # ===== Password Hashing =====
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -86,6 +86,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
         )
     access_token = create_access_token(data={"sub": form_data.username})
+    print(access_token)
     return {
         "access_token": access_token,
         "token_type": "bearer",
