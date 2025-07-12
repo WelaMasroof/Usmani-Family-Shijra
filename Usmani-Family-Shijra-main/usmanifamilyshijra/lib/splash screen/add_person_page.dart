@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<ValueNotifier<GraphQLClient>> initGraphQLClient() async {
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString('jwt');
 
-  final authLink = AuthLink(
-    getToken: () async => 'Bearer $token',
-  );
-
-  final httpLink = HttpLink('http://127.0.0.1:8000/graphql'); // Update IP if needed
+  final authLink = AuthLink(getToken: () async => 'Bearer $token');
+  final httpLink = HttpLink('http://127.0.0.1:8080/graphql');
 
   final link = authLink.concat(httpLink);
 
@@ -67,7 +63,6 @@ class _AddPersonPageState extends State<AddPersonPage> {
             onPressed: () {
               Navigator.pop(context);
               if (!isError) {
-                // Clear form on success
                 _formKey.currentState?.reset();
                 _nameController.clear();
                 _fatherNameController.clear();
@@ -84,117 +79,127 @@ class _AddPersonPageState extends State<AddPersonPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Add Family Member")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Mutation(
-          options: MutationOptions(
-            document: gql(createPersonMutation),
-            onCompleted: (dynamic resultData) {
-              if (!mounted) return;
-              setState(() => _isSubmitting = false);
+    return FutureBuilder<ValueNotifier<GraphQLClient>>(
+      future: initGraphQLClient(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-              final person = resultData?['createPerson'];
-              if (person != null) {
-                _showResultDialog(
-                  "Person Added",
-                  "Person was successfully added.\n\nID: ${person['id'] ?? 'N/A'}\nName: ${person['name'] ?? 'N/A'}",
-                );
-              }
+        return GraphQLProvider(
+          client: snapshot.data!,
+          child: Scaffold(
+            appBar: AppBar(title: const Text("Add Family Member")),
+            body: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Mutation(
+                options: MutationOptions(
+                  document: gql(createPersonMutation),
+                  onCompleted: (dynamic resultData) {
+                    if (!mounted) return;
+                    setState(() => _isSubmitting = false);
 
-            },
-            onError: (error) {
-              if (!mounted) return;
-              setState(() => _isSubmitting = false);
+                    final person = resultData?['createPerson'];
+                    if (person != null) {
+                      _showResultDialog(
+                        "Person Added",
+                        "Person was successfully added.\n\nID: ${person['id'] ?? 'N/A'}\nName: ${person['name'] ?? 'N/A'}",
+                      );
+                    }
+                  },
+                  onError: (error) {
+                    if (!mounted) return;
+                    setState(() => _isSubmitting = false);
 
-              String errorMessage = "An unknown error occurred";
-              if (error != null) {
-                if (error.graphqlErrors.isNotEmpty) {
-                  // Extract the meaningful part of the error message
-                  errorMessage = error.graphqlErrors.first.message;
-                  if (errorMessage.contains("Exception: ")) {
-                    errorMessage = errorMessage.split("Exception: ").last;
-                  }
-                } else if (error.linkException != null) {
-                  errorMessage = error.linkException.toString();
-                }
-              }
-
-              _showResultDialog(
-                "Error",
-                errorMessage,
-                isError: true,
-              );
-            },
-          ),
-          builder: (RunMutation runMutation, QueryResult? result) {
-            return Form(
-              key: _formKey,
-              child: ListView(
-                children: [
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: "Name"),
-                    validator: (val) => val!.isEmpty ? "Required" : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: "Gender"),
-                    value: gender,
-                    items: const [
-                      DropdownMenuItem(value: 'male', child: Text('Male')),
-                      DropdownMenuItem(value: 'female', child: Text('Female')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => gender = value);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _fatherNameController,
-                    decoration: const InputDecoration(labelText: "Father's Name"),
-                    validator: (val) => val!.isEmpty ? "Required" : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _grandfatherNameController,
-                    decoration: const InputDecoration(labelText: "Grandfather's Name"),
-                    validator: (val) => val!.isEmpty ? "Required" : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _motherNameController,
-                    decoration: const InputDecoration(labelText: "Mother's Name (optional)"),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _isSubmitting ? null : () {
-                      if (_formKey.currentState!.validate()) {
-                        setState(() => _isSubmitting = true);
-                        runMutation({
-                          "person": {
-                            "name": _nameController.text,
-                            "gender": gender,
-                            "fatherName": _fatherNameController.text,
-                            "grandfatherName": _grandfatherNameController.text,
-                            "motherName": _motherNameController.text.isNotEmpty
-                                ? _motherNameController.text
-                                : null,
-                          }
-                        });
+                    String errorMessage = "An unknown error occurred";
+                    if (error != null) {
+                      if (error.graphqlErrors.isNotEmpty) {
+                        errorMessage = error.graphqlErrors.first.message;
+                        if (errorMessage.contains("Exception: ")) {
+                          errorMessage = errorMessage.split("Exception: ").last;
+                        }
+                      } else if (error.linkException != null) {
+                        errorMessage = error.linkException.toString();
                       }
-                    },
-                    child: _isSubmitting
-                        ? const CircularProgressIndicator()
-                        : const Text("Add Person"),
-                  ),
-                ],
+                    }
+
+                    _showResultDialog("Error", errorMessage, isError: true);
+                  },
+                ),
+                builder: (RunMutation runMutation, QueryResult? result) {
+                  return Form(
+                    key: _formKey,
+                    child: ListView(
+                      children: [
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(labelText: "Name"),
+                          validator: (val) => val!.isEmpty ? "Required" : null,
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(labelText: "Gender"),
+                          value: gender,
+                          items: const [
+                            DropdownMenuItem(value: 'male', child: Text('Male')),
+                            DropdownMenuItem(value: 'female', child: Text('Female')),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) setState(() => gender = value);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _fatherNameController,
+                          decoration: const InputDecoration(labelText: "Father's Name"),
+                          validator: (val) => val!.isEmpty ? "Required" : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _grandfatherNameController,
+                          decoration: const InputDecoration(labelText: "Grandfather's Name"),
+                          validator: (val) => val!.isEmpty ? "Required" : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _motherNameController,
+                          decoration: const InputDecoration(labelText: "Mother's Name (optional)"),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: _isSubmitting
+                              ? null
+                              : () {
+                            if (_formKey.currentState!.validate()) {
+                              setState(() => _isSubmitting = true);
+                              runMutation({
+                                "person": {
+                                  "name": _nameController.text,
+                                  "gender": gender,
+                                  "fatherName": _fatherNameController.text,
+                                  "grandfatherName": _grandfatherNameController.text,
+                                  "motherName": _motherNameController.text.isNotEmpty
+                                      ? _motherNameController.text
+                                      : null,
+                                }
+                              });
+                            }
+                          },
+                          child: _isSubmitting
+                              ? const CircularProgressIndicator()
+                              : const Text("Add Person"),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 

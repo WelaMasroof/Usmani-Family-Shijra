@@ -68,7 +68,7 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
     final token = prefs.getString('jwt');
 
     final authLink = AuthLink(getToken: () async => 'Bearer $token');
-    final httpLink = HttpLink('http://127.0.0.1:8000/graphql');
+    final httpLink = HttpLink('http://127.0.0.1:8080/graphql');
     final link = authLink.concat(httpLink);
 
     _client = ValueNotifier(
