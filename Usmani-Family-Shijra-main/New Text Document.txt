@@ -1,0 +1,233 @@
+import 'packagefluttermaterial.dart';
+import 'packagegraphviewGraphView.dart';
+import 'packagehttphttp.dart' as http;
+import 'dartconvert';
+
+class FamilyTreeGraphPage extends StatefulWidget {
+  const FamilyTreeGraphPage({super.key});
+
+  @override
+  StateFamilyTreeGraphPage createState() = _FamilyTreeGraphPageState();
+}
+
+class _FamilyTreeGraphPageState extends StateFamilyTreeGraphPage {
+  Graph graph = Graph();
+  final MapString, Node nodeMap = {};
+  final BuchheimWalkerConfiguration builder = BuchheimWalkerConfiguration();
+  bool isLoading = true;
+  String errorMessage = '';
+  final TransformationController _transformationController = TransformationController();
+  double _currentScale = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchAndBuildGraph();
+  }
+
+  Futurevoid fetchAndBuildGraph() async {
+    const url = 'http127.0.0.18080graphql';
+    const query = '''
+      query {
+        allPersons {
+          id
+          name
+          fatherName
+        }
+      }
+    ''';
+
+    try {
+      setState(() {
+        graph = Graph();
+        nodeMap.clear();
+        isLoading = true;
+        errorMessage = '';
+      });
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers {Content-Type applicationjson},
+        body json.encode({query query}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final persons = data['data']['allPersons'] as Listdynamic;
+
+         Create case-insensitive name to ID mapping
+        final MapString, String nameToIdMap = {};
+        final MapString, ListString childrenMap = {};
+
+         First pass create all nodes
+        for (var person in persons) {
+          final id = person['id'] as String;
+          final name = person['name'] as String;
+          final fatherName = person['fatherName'] as String;
+
+          nameToIdMap[name.toLowerCase()] = id;
+
+          if (!nodeMap.containsKey(id)) {
+            final node = Node.Id(id);
+            node.key = ValueKey(name);
+            nodeMap[id] = node;
+            graph.addNode(node);
+          }
+
+           Build children mapping
+          if (fatherName != null && fatherName != None) {
+            childrenMap.putIfAbsent(fatherName.toLowerCase(), () = []).add(id);
+          }
+        }
+
+         Second pass create edges with proper child spacing
+        for (var entry in childrenMap.entries) {
+          final fatherName = entry.key;
+          final childrenIds = entry.value;
+
+          if (nameToIdMap.containsKey(fatherName)) {
+            final fatherId = nameToIdMap[fatherName]!;
+            final fatherNode = nodeMap[fatherId]!;
+
+             Add edges for all children
+            for (var childId in childrenIds) {
+              if (nodeMap.containsKey(childId)) {
+                graph.addEdge(fatherNode, nodeMap[childId]!);
+              }
+            }
+          }
+        }
+
+        setState(() {
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage = 'Failed to load data ${response.statusCode}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Error $e';
+      });
+    }
+  }
+
+  Widget _buildNodeWidget(String name) {
+    return Container(
+      padding const EdgeInsets.all(12),
+      margin const EdgeInsets.symmetric(horizontal 4),
+      decoration BoxDecoration(
+        color Colors.blue[50],
+        border Border.all(color Colors.blue.shade200),
+        borderRadius BorderRadius.circular(8),
+        boxShadow [
+          BoxShadow(
+            color Colors.grey.withOpacity(0.3),
+            spreadRadius 1,
+            blurRadius 3,
+            offset const Offset(0, 2),
+          ),
+        ],
+      ),
+      child Text(
+        name,
+        textAlign TextAlign.center,
+        style const TextStyle(
+          fontSize 14,
+          fontWeight FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  void _zoomOut() {
+    setState(() {
+      _currentScale = 0.5;
+      _transformationController.value = Matrix4.identity()..scale(_currentScale);
+    });
+  }
+
+  void _zoomIn() {
+    setState(() {
+      _currentScale = 2.0;
+      _transformationController.value = Matrix4.identity()..scale(_currentScale);
+    });
+  }
+
+  void _resetZoom() {
+    setState(() {
+      _currentScale = 1.0;
+      _transformationController.value = Matrix4.identity();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    builder
+      ..siblingSeparation = 40
+      ..levelSeparation = 80
+      ..subtreeSeparation = 40
+      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
+
+    return Scaffold(
+      appBar AppBar(
+        title const Text('Family Tree'),
+        actions [
+          IconButton(
+            icon const Icon(Icons.refresh),
+            onPressed fetchAndBuildGraph,
+          ),
+        ],
+      ),
+      body errorMessage.isNotEmpty
+           Center(child Text(errorMessage, style TextStyle(color Colors.red)))
+           isLoading
+           const Center(child CircularProgressIndicator())
+           InteractiveViewer(
+        constrained false,
+        boundaryMargin const EdgeInsets.all(100),
+        minScale 0.00001,
+        maxScale 100.0,
+        transformationController _transformationController,
+        onInteractionUpdate (details) {
+          _currentScale = _transformationController.value.getMaxScaleOnAxis();
+        },
+        child GraphView(
+          graph graph,
+          algorithm BuchheimWalkerAlgorithm(builder, TreeEdgeRenderer(builder)),
+          builder (Node node) {
+            final name = (node.key as ValueKey).value as String;
+            return _buildNodeWidget(name);
+          },
+        ),
+      ),
+      floatingActionButton Column(
+        mainAxisAlignment MainAxisAlignment.end,
+        children [
+          FloatingActionButton(
+            heroTag 'zoom_out',
+            mini true,
+            child const Icon(Icons.zoom_out),
+            onPressed _zoomOut,
+          ),
+          const SizedBox(height 8),
+          FloatingActionButton(
+            heroTag 'zoom_reset',
+            child const Icon(Icons.zoom_out_map),
+            onPressed _resetZoom,
+          ),
+          const SizedBox(height 8),
+          FloatingActionButton(
+            heroTag 'zoom_in',
+            mini true,
+            child const Icon(Icons.zoom_in),
+            onPressed _zoomIn,
+          ),
+        ],
+      ),
+    );
+  }
+}
