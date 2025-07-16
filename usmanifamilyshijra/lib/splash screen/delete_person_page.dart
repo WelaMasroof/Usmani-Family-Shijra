@@ -68,11 +68,7 @@ class _DeletePersonPageState extends State<DeletePersonPage> {
     final token = prefs.getString('jwt');
 
     final authLink = AuthLink(getToken: () async => 'Bearer $token');
-<<<<<<< HEAD
-    final httpLink = HttpLink('https://fast-api-shijra-nxa89pb0z-faaezs-projects-373a7c11.vercel.app/graphql');
-=======
-    final httpLink = HttpLink('https://fast-api-shijra-77sqbw2ks-faaezs-projects-373a7c11.vercel.app/graphql');
->>>>>>> 86b48afc3b0bd1c7102a56d76e18ff56fd1507f9
+    final httpLink = HttpLink('https://fast-api-shijra-2008non12-faaezs-projects-373a7c11.vercel.app/graphql');
     final link = authLink.concat(httpLink);
 
     _client = ValueNotifier(

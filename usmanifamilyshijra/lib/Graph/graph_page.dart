@@ -249,16 +249,28 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
 
     final pos = rb.localToGlobal(Offset.zero);
     final sz = rb.size;
+    final screenSize = MediaQuery.of(ctx).size;
+
+    const double tooltipWidth = 200;
+    const double tooltipHeight = 100;
+
+    double left = pos.dx + sz.width / 2 - tooltipWidth / 2;
+    double top = pos.dy - tooltipHeight;
+
+    // 🛑 Clamp the position inside screen boundaries
+    if (left < 10) left = 10;
+    if (left + tooltipWidth > screenSize.width) left = screenSize.width - tooltipWidth - 10;
+    if (top < 10) top = pos.dy + sz.height + 10; // Show below the node if there's no space above
 
     _overlayEntry?.remove();
     _overlayEntry = OverlayEntry(
       builder: (_) => Positioned(
-        left: pos.dx + sz.width / 2 - 100,
-        top: pos.dy - 70,
+        left: left,
+        top: top,
         child: Material(
           color: Colors.transparent,
           child: Container(
-            width: 200,
+            width: tooltipWidth,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.85),
@@ -289,6 +301,7 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
       _overlayEntry = null;
     });
   }
+
 
   void _searchAndHighlight(String term) {
     final n = term.trim().toLowerCase();
@@ -324,22 +337,69 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
 
       final bytes = await _captureFullGraph();
       final pdf = pw.Document();
+      final now = DateTime.now();
+      final formattedDate = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
-      pdf.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a4.landscape,
-        build: (ctx) => pw.Center(
-          child: pw.Column(
-            mainAxisSize: pw.MainAxisSize.min,
-            children: [
-              pw.Text('Usmani Family Shijra',
-                  style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 20),
-              pw.Expanded(child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain)),
-            ],
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4.landscape,
+          build: (ctx) => pw.Padding(
+            padding: const pw.EdgeInsets.all(24),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                // 🔝 Title and Date at the top
+                pw.Text(
+                  'Usmani Family Shijra',
+                  style: pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  'Generated on: $formattedDate',
+                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                ),
+                pw.SizedBox(height: 20),
+
+                // 📊 Graph Image in Center
+                pw.Expanded(
+                  child: pw.Center(
+                    child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
+                  ),
+                ),
+
+                pw.SizedBox(height: 20),
+                pw.Divider(),
+
+                // 👨‍💻 Developer Info at bottom
+                pw.Align(
+                  alignment: pw.Alignment.centerLeft,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Developed by:',
+                          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('• Umar Farooq', style: pw.TextStyle(fontSize: 12)),
+                      pw.Text('• Muhammad Faeez', style: pw.TextStyle(fontSize: 12)),
+                      pw.SizedBox(height: 6),
+                      pw.Text('App: Usmani Family Shijra App (v1.0) - Android',
+                          style: pw.TextStyle(fontSize: 12)),
+                      pw.Text('Contact: uummeerr0786@gmail.com',
+                          style: pw.TextStyle(fontSize: 12)),
+                      pw.Text('Portfolio: https://umerfarooq003.web.app/',
+                          style: pw.TextStyle(fontSize: 12, color: PdfColors.blue)),
+                      pw.SizedBox(height: 10),
+                      pw.Text(
+                        'Note: This shijra is auto-generated. Please verify details manually if required.',
+                        style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ));
-
+      );
       await Printing.layoutPdf(onLayout: (fmt) => pdf.save());
     } catch (e) {
       debugPrint("Error exporting PDF: $e");
@@ -357,6 +417,7 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Usmani Family Shijra"),
+        backgroundColor: Colors.teal,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -366,37 +427,80 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
         ],
       ),
       drawer: Drawer(
-        child: ListView(children: [
-          const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.blue),
-              child: Text('Menu',
-                  style: TextStyle(color: Colors.white, fontSize: 24))),
-          ListTile(
-              leading: const Icon(Icons.search),
-              title: const Text('Search Family Member'),
-              onTap: () async {
-                Navigator.pop(context);
-                final res = await showSearch<String?>(
-                    context: ctx, delegate: FamilyMemberSearchDelegate(nodeMap));
-                if (res != null) _searchAndHighlight(res);
-              }),
-          ListTile(
-              leading: const Icon(Icons.print),
-              title: const Text('Export as PDF'),
-              onTap: () {
-                Navigator.pop(context);
-                _exportGraphAsPdf();
-              }),
-          ListTile(
-            leading: const Icon(Icons.login_outlined),
-            title: const Text('Login'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/login');
-            },
-          ),
-        ]),
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Colors.blue),
+              margin: EdgeInsets.zero,
+              padding: EdgeInsets.zero,
+              child: Container(
+                alignment: Alignment.topLeft,
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Menu',
+                        style: TextStyle(color: Colors.white, fontSize: 24)),
+                    SizedBox(height: 10),
+                    Text('Umar Farooq',
+                        style: TextStyle(color: Colors.white70, fontSize: 16)),
+                    Text('uummeerr0786@gmail.com',
+                        style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.search),
+                    title: const Text('Search Family Member'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      final res = await showSearch<String?>(
+                          context: ctx,
+                          delegate: FamilyMemberSearchDelegate(nodeMap));
+                      if (res != null) _searchAndHighlight(res);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.print),
+                    title: const Text('Export as PDF'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _exportGraphAsPdf();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.login_outlined),
+                    title: const Text('Login'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/login');
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: const [
+                  Text('Developed by',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 4),
+                  Text('Umar Farooq'),
+                  Text('Muhammad Faeez')
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
+
+
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
@@ -407,6 +511,7 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
             boundaryMargin: const EdgeInsets.all(100),
             minScale: 0.1,
             maxScale: 10,
+            scaleEnabled: false,
             child: RepaintBoundary(
               key: _previewContainer,
               child: graph.nodes.isEmpty
@@ -427,57 +532,66 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FloatingActionButton(
-                heroTag: 'zoomIn',
-                mini: true,
-                onPressed: () {
-                  setState(() {
-                    _transformationController.value =
-                    _transformationController.value.clone()..scale(1.2);
-                  });
-                },
-                child: const Icon(Icons.zoom_in),
-              ),
-              const SizedBox(width: 20),
-              FloatingActionButton(
-                heroTag: 'zoomOut',
-                mini: true,
-                onPressed: () {
-                  setState(() {
-                    _transformationController.value =
-                    _transformationController.value.clone()..scale(0.8);
-                  });
-                },
-                child: const Icon(Icons.zoom_out),
-              ),
-              const SizedBox(width: 20),
-              FloatingActionButton(
-                heroTag: 'resetZoom',
-                mini: true,
-                onPressed: () {
-                  setState(() {
-                    _transformationController.value = Matrix4.identity()..scale(0.7);
-                  });
-                },
-                child: const Icon(Icons.refresh),
-              ),
-              const SizedBox(width: 20),
-              FloatingActionButton(
-                heroTag: 'clearPath',
-                mini: true,
-                onPressed: () {
-                  setState(() {
-                    pathToRoot.clear();
-                  });
-                },
-                child: const Icon(Icons.clear_all),
-              ),
-            ],
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey, // 👈 Set your background color here
+              borderRadius: BorderRadius.circular(12), // Optional: rounded corners
+            ),
+            padding: const EdgeInsets.all(8.0), // Optional: internal padding
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'zoomIn',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      _transformationController.value =
+                      _transformationController.value.clone()..scale(1.2);
+                    });
+                  },
+                  child: const Icon(Icons.zoom_in),
+                ),
+                const SizedBox(width: 20),
+                FloatingActionButton(
+                  heroTag: 'zoomOut',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      _transformationController.value =
+                      _transformationController.value.clone()..scale(0.8);
+                    });
+                  },
+                  child: const Icon(Icons.zoom_out),
+                ),
+                const SizedBox(width: 20),
+                FloatingActionButton(
+                  heroTag: 'resetZoom',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      _transformationController.value = Matrix4.identity()..scale(0.7);
+                    });
+                  },
+                  child: const Icon(Icons.refresh),
+                ),
+                const SizedBox(width: 20),
+                FloatingActionButton(
+                  heroTag: 'clearPath',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      pathToRoot.clear();
+                    });
+                  },
+                  child: const Icon(Icons.clear_all),
+                ),
+              ],
+            ),
           ),
         ),
+
+
       ]),
     );
   }
