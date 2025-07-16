@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
 from strawberry.fastapi import GraphQLRouter
-from schema import schema
+from api.schema import schema
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 # ===== JWT Configuration =====
