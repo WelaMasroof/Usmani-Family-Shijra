@@ -1,8 +1,8 @@
 import strawberry
 from typing import List, Optional
-from api.db import get_session
+from db import get_session
 import Levenshtein
-from api.auth import get_current_user
+from auth import get_current_user
 from fastapi import Depends
 from strawberry.permission import BasePermission
 from strawberry.types import Info 
@@ -46,7 +46,7 @@ class IsAuthenticated(BasePermission):
         request = info.context["request"]
         token = request.headers.get("authorization", "").replace("Bearer ", "")
         try:
-            jwt.decode(token, "YOUR_SECRET_KEY", algorithms=["HS256"])
+            jwt.decode(token, "ABC", algorithms=["HS256"])
             return True  # ✅ Valid JWT
         except JWTError:
             return False  # ❌ Block request
@@ -175,7 +175,7 @@ class Mutation:
                 grandfather_name=created["grandfather_name"],
                 mother_name=created.get("mother_name")
             )
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def delete_person(self, person: DeletePersonInput) -> str:
         with get_session() as session:
             if person.id:
