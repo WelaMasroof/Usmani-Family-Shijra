@@ -7,11 +7,10 @@ Future<ValueNotifier<GraphQLClient>> initGraphQLClient() async {
   final token = prefs.getString('jwt');
 
   final authLink = AuthLink(getToken: () async => 'Bearer $token');
-<<<<<<< HEAD
+
   final httpLink = HttpLink('https://fast-api-shijra-nxa89pb0z-faaezs-projects-373a7c11.vercel.app/graphql');
-=======
-  final httpLink = HttpLink('https://fast-api-shijra-77sqbw2ks-faaezs-projects-373a7c11.vercel.app/graphql');
->>>>>>> 86b48afc3b0bd1c7102a56d76e18ff56fd1507f9
+
+
 
   final link = authLink.concat(httpLink);
 
@@ -33,6 +32,8 @@ class AddPersonPage extends StatefulWidget {
 class _AddPersonPageState extends State<AddPersonPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _notesController = TextEditingController();
+  bool isImportant = false;
   final _fatherNameController = TextEditingController();
   final _grandfatherNameController = TextEditingController();
   final _motherNameController = TextEditingController();
@@ -171,6 +172,25 @@ class _AddPersonPageState extends State<AddPersonPage> {
                           controller: _motherNameController,
                           decoration: const InputDecoration(labelText: "Mother's Name (optional)"),
                         ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<bool>(
+                          decoration: const InputDecoration(labelText: "Is Important"),
+                          value: isImportant,
+                          items: const [
+                            DropdownMenuItem(value: true, child: Text('Yes')),
+                            DropdownMenuItem(value: false, child: Text('No')),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) setState(() => isImportant = value);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _notesController,
+                          decoration: const InputDecoration(labelText: "Notes (optional)"),
+                          maxLines: 2,
+                        ),
+
                         const SizedBox(height: 20),
                         ElevatedButton(
                           onPressed: _isSubmitting
@@ -187,6 +207,8 @@ class _AddPersonPageState extends State<AddPersonPage> {
                                   "motherName": _motherNameController.text.isNotEmpty
                                       ? _motherNameController.text
                                       : null,
+                                  "isimp": isImportant,
+                                  "notes": _notesController.text.isNotEmpty ? _notesController.text : null,
                                 }
                               });
                             }
@@ -214,5 +236,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
     _grandfatherNameController.dispose();
     _motherNameController.dispose();
     super.dispose();
+    _notesController.dispose();
+
   }
 }

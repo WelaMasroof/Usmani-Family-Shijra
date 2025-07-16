@@ -1,12 +1,13 @@
 import strawberry
 from typing import List, Optional
-from db import get_session
+from api.db import get_session
 import Levenshtein
-from auth import get_current_user
+from api.auth import get_current_user
 from fastapi import Depends
 from strawberry.permission import BasePermission
 from strawberry.types import Info 
-from jose import jwt, JWTError# Input for creating a person
+from jose import jwt, JWTError
+
 @strawberry.input
 class PersonInput:
     name: str
@@ -14,23 +15,25 @@ class PersonInput:
     father_name: str
     grandfather_name: str
     mother_name: Optional[str] = None
+    isimp: bool
+    notes: Optional[str] = ""
 
-# Input for deleting a person
 @strawberry.input
 class DeletePersonInput:
     id: Optional[str] = None
     name: Optional[str] = None
     father_name: Optional[str] = None
 
-# Output model
 @strawberry.type
 class Person:
     id: str
     name: str
-    father_name: str
-    grandfather_name: str
+    father_name: Optional[str]
+    grandfather_name: Optional[str]
     gender: str
     mother_name: Optional[str]
+    isimp: Optional[bool]
+    notes: Optional[str]
 
 @strawberry.type
 class Ancestor:
@@ -47,9 +50,10 @@ class IsAuthenticated(BasePermission):
         token = request.headers.get("authorization", "").replace("Bearer ", "")
         try:
             jwt.decode(token, "ABC", algorithms=["HS256"])
-            return True  # ✅ Valid JWT
+            return True
         except JWTError:
-            return False  # ❌ Block request
+            return False
+
 @strawberry.type
 class Query:
     @strawberry.field
@@ -60,10 +64,12 @@ class Query:
                 Person(
                     id=record["p"]["id"],
                     name=record["p"]["name"],
-                    father_name=record["p"]["father_name"],
-                    grandfather_name=record["p"]["grandfather_name"],
+                    father_name=record["p"].get("father_name"),
+                    grandfather_name=record["p"].get("grandfather_name"),
                     gender=record["p"]["gender"],
-                    mother_name=record["p"].get("mother_name")
+                    mother_name=record["p"].get("mother_name"),
+                    isimp=record["p"].get("isimp"),
+                    notes=record["p"].get("notes")
                 )
                 for record in result
             ]
@@ -73,12 +79,12 @@ class Query:
         with get_session() as session:
             result = session.run("""
                 MATCH path = (p:Person)-[:SON_OF|DAUGHTER_OF*]->(ancestor:Person)
-WHERE toLower(p.name) = toLower($name) AND toLower(p.father_name) = toLower($father_name)
-WITH path
-ORDER BY length(path) DESC
-LIMIT 1
-UNWIND nodes(path) AS n
-RETURN DISTINCT n
+                WHERE toLower(p.name) = toLower($name) AND toLower(p.father_name) = toLower($father_name)
+                WITH path
+                ORDER BY length(path) DESC
+                LIMIT 1
+                UNWIND nodes(path) AS n
+                RETURN DISTINCT n
             """, {"name": name, "father_name": father_name})
 
             return [
@@ -93,14 +99,11 @@ RETURN DISTINCT n
                 for node in result
             ]
 
-# Mutation class
 @strawberry.type
 class Mutation:
     @strawberry.mutation(permission_classes=[IsAuthenticated]) 
     async def create_person(self, person: PersonInput) -> Person:
-        """Create a new person (requires admin JWT)"""
         with get_session() as session:
-            # Verify father exists
             father_result = session.run("""
                 MATCH (f:Person)
                 WHERE toLower(f.name) = toLower($father_name)
@@ -111,7 +114,6 @@ class Mutation:
             if not father_record:
                 raise Exception(f"Father '{person.father_name}' not found")
             
-            # Verify grandfather consistency
             father_node = father_record["f"]
             actual_grandfather = father_node.get("father_name")
 
@@ -120,7 +122,6 @@ class Mutation:
             if actual_grandfather.lower() != person.grandfather_name.lower():
                 raise Exception(f"Grandfather mismatch: Expected '{actual_grandfather}', got '{person.grandfather_name}'")
 
-            # Check for similar names
             similar_name_result = session.run("""
                 MATCH (p:Person)
                 WHERE toLower(p.father_name) = toLower($father_name)
@@ -133,7 +134,6 @@ class Mutation:
                 if distance <= 2:
                     raise Exception(f"A similar person '{existing_name}' already exists with the same father name")
 
-            # Create the new person
             result = session.run("""
                 CREATE (p:Person {
                     id: randomUUID(),
@@ -141,7 +141,9 @@ class Mutation:
                     gender: $gender,
                     father_name: $father_name,
                     grandfather_name: $grandfather_name,
-                    mother_name: $mother_name
+                    mother_name: $mother_name,
+                    isimp: $isimp,
+                    notes: $notes
                 })
                 RETURN p
             """, {
@@ -150,11 +152,12 @@ class Mutation:
                 "father_name": person.father_name,
                 "grandfather_name": person.grandfather_name,
                 "mother_name": person.mother_name,
+                "isimp": person.isimp,
+                "notes": person.notes
             })
 
             created = result.single()["p"]
 
-            # Create relationship
             relation = "SON_OF" if person.gender.lower() in ["male", "m"] else "DAUGHTER_OF"
             session.run(f"""
                 MATCH (child:Person)
@@ -171,10 +174,13 @@ class Mutation:
                 id=created["id"],
                 name=created["name"],
                 gender=created["gender"],
-                father_name=created["father_name"],
-                grandfather_name=created["grandfather_name"],
-                mother_name=created.get("mother_name")
+                father_name=created.get("father_name"),
+                grandfather_name=created.get("grandfather_name"),
+                mother_name=created.get("mother_name"),
+                isimp=created.get("isimp"),
+                notes=created.get("notes")
             )
+
     @strawberry.mutation(permission_classes=[IsAuthenticated])
     def delete_person(self, person: DeletePersonInput) -> str:
         with get_session() as session:
@@ -224,7 +230,6 @@ class Mutation:
 
             if delete_result.single()["deleted"] == 0:
                 raise Exception("Deletion failed.")
-
             return "Person deleted successfully."
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)

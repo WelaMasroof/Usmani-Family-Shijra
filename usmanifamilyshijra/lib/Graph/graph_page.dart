@@ -271,6 +271,8 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                   Text('Name: ${p.name}', style: const TextStyle(color: Colors.white)),
                 if (p.fatherName.isNotEmpty)
                   Text('Father: ${p.fatherName}', style: const TextStyle(color: Colors.white)),
+                if (p.fatherName.isNotEmpty)
+                  Text('Father: ${p.fatherName}', style: const TextStyle(color: Colors.white)),
                 if (p.id.isNotEmpty)
                   Text('ID: ${p.id}', style: const TextStyle(color: Colors.white)),
                 const SizedBox(height: 8),
