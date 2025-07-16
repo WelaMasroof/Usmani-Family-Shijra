@@ -22,7 +22,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/token'),
+        Uri.parse('https://fast-api-shijra-nxa89pb0z-faaezs-projects-373a7c11.vercel.app/token'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
           'username': _usernameController.text.trim(),
@@ -35,8 +35,9 @@ class _LoginPageState extends State<LoginPage> {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         final token = json['access_token'];
-
+        debugPrint('✅ login successful, token: $token');
         final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt', token);
         await prefs.setString('jwt', token);
 
         const secureStorage = FlutterSecureStorage();

@@ -4,7 +4,7 @@ import '../models/person.dart';
 
 
 class ApiService {
-  static const String apiUrl = "http://127.0.0.1:8000/graphql"; // your actual endpoint
+  static const String apiUrl = "https://fast-api-shijra-nxa89pb0z-faaezs-projects-373a7c11.vercel.app/graphql"; // your actual endpoint
 
   static Future<List<Person>> fetchPersons() async {
     const query = '''
@@ -13,6 +13,7 @@ class ApiService {
           id
           name
           fatherName
+          motherName
         }
       }
     ''';
