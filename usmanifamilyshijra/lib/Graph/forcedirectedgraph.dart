@@ -490,17 +490,6 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                       _exportGraphAsPdf();
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.info),
-                    title: const Text('About'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AboutPage()),
-                      );
-                    },
-                  ),
 
                   if (_isAdmin) ...[
                     ListTile(
@@ -527,6 +516,17 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                         await s.delete(key: 'admin_token');
                         Navigator.pushReplacement(
                             ctx, MaterialPageRoute(builder: (_) => const LoginPage()));
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.info),
+                      title: const Text('About'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AboutPage()),
+                        );
                       },
                     ),
                   ],
