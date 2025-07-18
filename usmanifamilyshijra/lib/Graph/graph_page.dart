@@ -5,7 +5,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:graphview/GraphView.dart';
 import 'package:pdf/widgets.dart' as pw;
-import '../splash screen/About page.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import '../API/api_service.dart';
@@ -509,17 +508,6 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/login');
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.info),
-                    title: const Text('About'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AboutPage()),
-                      );
                     },
                   ),
                 ],
