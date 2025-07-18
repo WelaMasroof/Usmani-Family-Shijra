@@ -217,10 +217,9 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.person, size: 24, color: Colors.black87),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               SizedBox(
-                width: 140,
+                width: 150,
                 child: Text(name,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -285,6 +284,8 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                   Text('Name: ${p.name}', style: const TextStyle(color: Colors.white)),
                 if (p.fatherName.isNotEmpty)
                   Text('Father: ${p.fatherName}', style: const TextStyle(color: Colors.white)),
+                if (p.id.isNotEmpty)
+                  Text('ID: ${p.id}', style: const TextStyle(color: Colors.white)),
                 if (p.id.isNotEmpty)
                   Text('ID: ${p.id}', style: const TextStyle(color: Colors.white)),
                 const SizedBox(height: 8),

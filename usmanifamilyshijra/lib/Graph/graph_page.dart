@@ -216,10 +216,10 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.person, size: 24, color: Colors.black87),
-              const SizedBox(height: 4),
+
+              const SizedBox(height: 5),
               SizedBox(
-                width: 140,
+                width: 150,
                 child: Text(name,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
