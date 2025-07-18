@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import '../API/api_service.dart';
 import '../models/person.dart';
+import '../splash screen/About Page.dart';
 import '../splash screen/login page.dart';
 
 class GraphPage extends StatefulWidget {
@@ -379,14 +380,18 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                       pw.Text('Developed by:',
                           style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
                       pw.Text('• Umar Farooq', style: pw.TextStyle(fontSize: 12)),
-                      pw.Text('• Muhammad Faeez', style: pw.TextStyle(fontSize: 12)),
-                      pw.SizedBox(height: 6),
-                      pw.Text('App: Usmani Family Shijra App (v1.0) - Android',
-                          style: pw.TextStyle(fontSize: 12)),
                       pw.Text('Contact: uummeerr0786@gmail.com',
                           style: pw.TextStyle(fontSize: 12)),
                       pw.Text('Portfolio: https://umerfarooq003.web.app/',
                           style: pw.TextStyle(fontSize: 12, color: PdfColors.blue)),
+                      pw.Text('• Muhammad Faaez Usmani', style: pw.TextStyle(fontSize: 12)),
+                      pw.Text('Contact: faeezusmani2002@gmail.com',
+                          style: pw.TextStyle(fontSize: 12)),
+                      pw.Text('Phone Number: https://umerfarooq003.web.app/',
+                          style: pw.TextStyle(fontSize: 12, color: PdfColors.blue)),
+                      pw.SizedBox(height: 6),
+                      pw.Text('App: Usmani Family Shijra App (v1.0) - Android',
+                          style: pw.TextStyle(fontSize: 12)),
                       pw.SizedBox(height: 10),
                       pw.Text(
                         'Note: This shijra is auto-generated. Please verify details manually if required.',
@@ -415,17 +420,35 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext ctx) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Usmani Family Shijra"),
-        backgroundColor: Colors.teal,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: loadGraph,
-            tooltip: 'Refresh Graph',
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          backgroundColor: Colors.teal,
+          centerTitle: true,
+          title: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Text(
+                'Usmani Family Shajra',
+                style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'For Addition in Shajra: Faaez Usmani - 0306-1234567',
+                style: TextStyle(fontSize: 18),
+              ),
+            ],
           ),
-        ],
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: loadGraph,
+              tooltip: 'refresh graph',
+            ),
+          ],
+        ),
       ),
+
       drawer: Drawer(
         child: Column(
           children: [
@@ -441,11 +464,7 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                   children: const [
                     Text('Menu',
                         style: TextStyle(color: Colors.white, fontSize: 24)),
-                    SizedBox(height: 10),
-                    Text('Umar Farooq',
-                        style: TextStyle(color: Colors.white70, fontSize: 16)),
-                    Text('uummeerr0786@gmail.com',
-                        style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    SizedBox(height: 5),
                   ],
                 ),
               ),
@@ -473,6 +492,17 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                     },
                   ),
                   ListTile(
+                    leading: const Icon(Icons.info),
+                    title: const Text('About'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AboutPage()),
+                      );
+                    },
+                  ),
+                  ListTile(
                     leading: const Icon(Icons.login_outlined),
                     title: const Text('Login'),
                     onTap: () {
@@ -492,7 +522,7 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                       style: TextStyle(fontWeight: FontWeight.bold)),
                   SizedBox(height: 4),
                   Text('Umar Farooq'),
-                  Text('Muhammad Faeez')
+                  Text('Muhammad Faaez Usmani')
                 ],
               ),
             ),

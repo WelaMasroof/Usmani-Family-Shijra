@@ -25,7 +25,7 @@ Future<ValueNotifier<GraphQLClient>> initGraphQLClient() async {
     getToken: () async => token != null ? 'Bearer $token' : null,
   );
 
-  final httpLink = HttpLink('https://fast-api-shijra-2008non12-faaezs-projects-373a7c11.vercel.app/token'); // change to IP on real device
+  final httpLink = HttpLink('https://fast-api-shijra.vercel.app/token'); // change to IP on real device
 
   final link = authLink.concat(httpLink); // 💥 combine auth + http links
 

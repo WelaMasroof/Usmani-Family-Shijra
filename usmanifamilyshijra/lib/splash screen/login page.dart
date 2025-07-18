@@ -22,7 +22,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('https://fast-api-shijra-2008non12-faaezs-projects-373a7c11.vercel.app/token'),
+        Uri.parse('https://fast-api-shijra.vercel.app/token'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
           'username': _usernameController.text.trim(),
