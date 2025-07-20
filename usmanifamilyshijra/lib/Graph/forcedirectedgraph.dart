@@ -172,10 +172,19 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
     final key = GlobalKey();
     final norm = name.trim().toLowerCase();
     final controller = _animationControllers[norm];
+    final person = personMap[norm];
+    final isImportant = person?.isimp ?? false;
+
+    // True size difference
+    final double boxWidth = isImportant ? 155 : 140;
+    final double fontSize = isImportant ? 14 : 13;
+    final double iconSize = isImportant ? 26 : 24;
+    final double paddingVertical = isImportant ? 8 : 6;
+    final double scaleFactor = isImportant ? 1.2 : 1.0;
+
 
     return GestureDetector(
       onLongPress: () {
-        // Long press to show path to root
         _highlightPathToRoot(norm);
         setState(() {
           highlightedName = norm;
@@ -195,12 +204,12 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
       child: AnimatedBuilder(
         animation: controller ?? AnimationController(vsync: this),
         builder: (ctx, child) => Transform.scale(
-          scale: controller?.value ?? 1.0,
+          scale: (controller?.value ?? 1.0) * scaleFactor,  // Applying scale here
           child: child,
         ),
         child: Container(
           key: key,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: paddingVertical),
           decoration: BoxDecoration(
             color: pathToRoot.contains(norm)
                 ? Colors.green.shade300
@@ -209,21 +218,22 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                 : Colors.yellow.shade300,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: norm == highlightedName ? Colors.red : Colors.transparent,
-              width: 2,
+              color: norm == highlightedName ? Colors.transparent : Colors.transparent,  // No red border
+              width: norm == highlightedName ? 2 : 0,
             ),
             boxShadow: [BoxShadow(blurRadius: 3, color: Colors.grey.shade400)],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.person, size: 24, color: Colors.black87),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               SizedBox(
-                width: 140,
-                child: Text(name,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                width: 150,
+                child: Text(
+                  name,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize),
+                ),
               ),
             ],
           ),
@@ -231,6 +241,9 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
       ),
     );
   }
+
+
+
 
   void _highlightChildren(String parent) {
     if (_treeMap.containsKey(parent)) {
@@ -253,16 +266,16 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
     final sz = rb.size;
     final screenSize = MediaQuery.of(ctx).size;
 
-    const double tooltipWidth = 200;
-    const double tooltipHeight = 100;
+    const double tooltipWidth = 240;
+    const double tooltipHeight = 160;
 
     double left = pos.dx + sz.width / 2 - tooltipWidth / 2;
     double top = pos.dy - tooltipHeight;
 
-    // 🛑 Clamp the position inside screen boundaries
+    // Keep tooltip within screen boundaries
     if (left < 10) left = 10;
     if (left + tooltipWidth > screenSize.width) left = screenSize.width - tooltipWidth - 10;
-    if (top < 10) top = pos.dy + sz.height + 10; // Show below the node if there's no space above
+    if (top < 10) top = pos.dy + sz.height + 10;
 
     _overlayEntry?.remove();
     _overlayEntry = OverlayEntry(
@@ -273,21 +286,23 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
           color: Colors.transparent,
           child: Container(
             width: tooltipWidth,
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (p.name.isNotEmpty)
-                  Text('Name: ${p.name}', style: const TextStyle(color: Colors.white)),
-                if (p.fatherName.isNotEmpty)
-                  Text('Father: ${p.fatherName}', style: const TextStyle(color: Colors.white)),
-                if (p.id.isNotEmpty)
-                  Text('ID: ${p.id}', style: const TextStyle(color: Colors.white)),
-                const SizedBox(height: 8),
+                _tooltipRow('Name', p.name),
+                _tooltipRow('Father', p.fatherName),
+                _tooltipRow('Grandfather', p.grandfatherName),
+                _tooltipRow('Mother', p.motherName),
+                _tooltipRow('ID', p.id),
+                if (p.notes.isNotEmpty) _tooltipRow('Notes', p.notes),
+                _tooltipRow('Important', p.isimp ? 'Yes' : 'No', isHighlight: p.isimp),
+                const SizedBox(height: 6),
                 Text('Long press to trace to root',
                     style: TextStyle(color: Colors.green.shade300, fontSize: 12)),
               ],
@@ -303,6 +318,29 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
       _overlayEntry = null;
     });
   }
+
+  Widget _tooltipRow(String label, String value, {bool isHighlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color: isHighlight ? Colors.orangeAccent : Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
 
   void _searchAndHighlight(String term) {
@@ -491,17 +529,7 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                       _exportGraphAsPdf();
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.info),
-                    title: const Text('About'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AboutPage()),
-                      );
-                    },
-                  ),
+
 
                   if (_isAdmin) ...[
                     ListTile(
@@ -518,6 +546,18 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.pushNamed(ctx, '/delete');
+                      },
+                    ),
+
+                    ListTile(
+                      leading: const Icon(Icons.info),
+                      title: const Text('About'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AboutPage()),
+                        );
                       },
                     ),
                     ListTile(

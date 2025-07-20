@@ -14,6 +14,9 @@ class ApiService {
           name
           fatherName
           motherName
+          grandfatherName
+          notes
+          isimp
         }
       }
     ''';
