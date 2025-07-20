@@ -465,13 +465,19 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
             children: const [
               Text(
                 'Usmani Family Shajra',
-                style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 4),
-              Text(
-                'For Addition in Shajra: Faaez Usmani - 0306-1234567',
-                style: TextStyle(fontSize: 18),
+              Align(
+                alignment: Alignment.center,
+                child: Text(
+                  'For Addition in Shajra\nFaaez Usmani 0306-1234567',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
               ),
+
+
             ],
           ),
           actions: [
