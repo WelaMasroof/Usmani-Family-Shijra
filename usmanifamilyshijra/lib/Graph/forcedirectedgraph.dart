@@ -1,728 +1,394 @@
 import 'dart:typed_data';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:graphview/GraphView.dart';
+import 'package:flutter_force_directed_graph/flutter_force_directed_graph.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import '../API/api_service.dart';
 import '../models/person.dart';
-import '../splash screen/About Page.dart';
-import '../splash screen/login page.dart';
-
+import 'package:pdf/pdf.dart';
 
 class FamilyTreeGraph extends StatefulWidget {
   const FamilyTreeGraph({super.key});
 
   @override
-  State<FamilyTreeGraph> createState() => _GraphPageState();
+  State<FamilyTreeGraph> createState() => _FamilyTreeGraphState();
 }
 
-class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMixin {
-  final Graph graph = Graph();
-  late BuchheimWalkerConfiguration builder;
-  final GlobalKey _previewContainer = GlobalKey();
+class _FamilyTreeGraphState extends State<FamilyTreeGraph> {
+  late final ForceDirectedGraphController<String> _controller;
+  final GlobalKey _graphKey = GlobalKey();
+  final Map<String, Person> _personMap = {};
+  final Set<String> _addedNodes = {};
+  final Set<String> _highlightedNodes = {}; // ✅ FIX: declare this!
+  bool _loading = true;
 
-  Map<String, Node> nodeMap = {};
-  Map<String, Person> personMap = {};
-  Map<String, AnimationController> _animationControllers = {};
-  OverlayEntry? _overlayEntry;
-
-  bool loading = true;
-  String? highlightedName;
-  Set<String> highlightedChildren = {};
-  Set<String> pathToRoot = {};
-  Map<String, List<String>> _treeMap = {};
-  final TransformationController _transformationController = TransformationController();
-  final TextEditingController _searchController = TextEditingController();
-  bool _isAdmin = false;
+  final List<Color> generationColors = [
+    Colors.green,
+    Colors.blue,
+    Colors.purple,
+    Colors.orange,
+    Colors.teal,
+    Colors.red,
+    Colors.brown,
+    Colors.pink,
+    Colors.indigo,
+  ];
 
   @override
   void initState() {
     super.initState();
-    builder = BuchheimWalkerConfiguration()
-      ..siblingSeparation = 25
-      ..levelSeparation = 60
-      ..subtreeSeparation = 25
-      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
-
-    _transformationController.value = Matrix4.identity()..scale(0.7);
-    _checkIfAdmin().then((_) => loadGraph());
-  }
-
-  Future<void> _checkIfAdmin() async {
-    final storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'admin_token');
-    if (token != null) {
-      setState(() {
-        _isAdmin = true;
-      });
-    }
+    _controller = ForceDirectedGraphController<String>();
+    _loadFamilyTree();
   }
 
   @override
   void dispose() {
-    _overlayEntry?.remove();
-    _transformationController.dispose();
-    _searchController.dispose();
-    for (var c in _animationControllers.values) {
-      c.dispose();
-    }
+    _controller.dispose();
     super.dispose();
   }
 
-  Future<void> loadGraph() async {
-    setState(() {
-      loading = true;
-      graph.edges.clear();
-      graph.nodes.clear();
-      nodeMap.clear();
-      personMap.clear();
-      _treeMap.clear();
-      _animationControllers.clear();
-      pathToRoot.clear();
-    });
-
+  Future<void> _loadFamilyTree() async {
     try {
       final persons = await ApiService.fetchPersons();
-      Map<String, List<String>> treeMap = {};
-      String normalize(String s) => s.trim().toLowerCase();
 
-      for (var p in persons) {
-        final child = normalize(p.name);
-        final father = normalize(p.fatherName);
-        if (father.isNotEmpty) {
-          treeMap[father] ??= [];
-          treeMap[father]!.add(child);
-        }
-        personMap[child] = p;
-      }
+      for (final person in persons) {
+        final normalizedName = person.name.trim().toLowerCase();
+        _personMap[normalizedName] = person;
 
-      _treeMap = treeMap;
-
-      for (var p in persons) {
-        final nameKey = normalize(p.name);
-        nodeMap[nameKey] = Node.Id(p.name);
-        _animationControllers[nameKey] = AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 300),
-          lowerBound: 0.9,
-          upperBound: 1.1,
-        )..addStatusListener((status) {
-          if (status == AnimationStatus.completed) {
-            _animationControllers[nameKey]?.reverse();
-          }
-        });
-      }
-
-      for (var entry in treeMap.entries) {
-        final fatherNode = nodeMap[entry.key];
-        for (var c in entry.value) {
-          final childNode = nodeMap[c];
-          if (fatherNode != null && childNode != null) {
-            graph.addEdge(fatherNode, childNode);
-          }
+        if (!_addedNodes.contains(normalizedName)) {
+          _controller.addNode(normalizedName);
+          _addedNodes.add(normalizedName);
         }
       }
 
-      setState(() {
-        loading = false;
-      });
+      for (final person in persons) {
+        final childName = person.name.trim();
+        final childKey = childName.toLowerCase();
+
+        final fatherName = person.fatherName.trim();
+        final fatherKey = fatherName.toLowerCase();
+
+        if (fatherName.isNotEmpty) {
+          if (!_addedNodes.contains(fatherKey)) {
+            _controller.addNode(fatherKey);
+            _addedNodes.add(fatherKey);
+          }
+
+          _controller.addEdgeByData(fatherKey, childKey);
+        }
+      }
+
+      setState(() => _loading = false);
     } catch (e) {
-      debugPrint("Error loading graph: $e");
-      setState(() {
-        loading = false;
-      });
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading family tree: $e')),
+      );
     }
   }
 
-  void _highlightPathToRoot(String nodeName) {
-    final norm = nodeName.trim().toLowerCase();
-    pathToRoot.clear();
+  int _calculateGeneration(String name) {
+    int generation = 0;
+    String? currentName = name.toLowerCase();
 
-    String current = norm;
-    bool foundRoot = false;
-
-    // Trace upwards until we can't find a parent
-    while (!foundRoot) {
-      pathToRoot.add(current);
-
-      // Find parent of current node
-      String? parent;
-      for (var entry in _treeMap.entries) {
-        if (entry.value.contains(current)) {
-          parent = entry.key;
-          break;
-        }
-      }
-
-      if (parent == null) {
-        foundRoot = true; // Reached the root
-      } else {
-        current = parent;
-      }
+    while (currentName != null &&
+        _personMap[currentName]?.fatherName.trim().isNotEmpty == true) {
+      final fatherName = _personMap[currentName]!.fatherName.trim().toLowerCase();
+      currentName = fatherName;
+      generation++;
     }
 
-    setState(() {});
+    return generation;
   }
 
-  Widget _nodeWidget(String name, {bool isChild = false}) {
-    final key = GlobalKey();
-    final norm = name.trim().toLowerCase();
-    final controller = _animationControllers[norm];
-    final person = personMap[norm];
-    final isImportant = person?.isimp ?? false;
 
-    // True size difference
-    final double boxWidth = isImportant ? 155 : 140;
-    final double fontSize = isImportant ? 14 : 13;
-    final double iconSize = isImportant ? 26 : 24;
-    final double paddingVertical = isImportant ? 8 : 6;
-    final double scaleFactor = isImportant ? 1.2 : 1.0;
+  String _getShortName(String fullName) {
+    final parts = fullName.split(' ');
+    if (parts.length > 2) {
+      return '${parts[0]} ${parts[1][0]}.';
+    }
+    return fullName;
+  }
 
+  Widget _nodeBuilder(BuildContext context, String name) {
+    final person = _personMap[name.toLowerCase()];
+    if (person == null) return const SizedBox();
+
+    final generation = _calculateGeneration(name.toLowerCase());
+    final color = generation < generationColors.length
+        ? generationColors[generation]
+        : Colors.grey;
+
+    final isRoot = generation == 0;
+    final isHighlighted = _highlightedNodes.contains(name.toLowerCase());
 
     return GestureDetector(
-      onLongPress: () {
-        _highlightPathToRoot(norm);
-        setState(() {
-          highlightedName = norm;
-          highlightedChildren.clear();
-        });
-      },
-      onTap: () {
-        controller?.forward();
-        _showTooltip(context, name, key);
-        setState(() {
-          highlightedName = norm;
-          highlightedChildren.clear();
-          pathToRoot.clear();
-          _highlightChildren(norm);
-        });
-      },
-      child: AnimatedBuilder(
-        animation: controller ?? AnimationController(vsync: this),
-        builder: (ctx, child) => Transform.scale(
-          scale: (controller?.value ?? 1.0) * scaleFactor,  // Applying scale here
-          child: child,
-        ),
+      onTap: () => _showPersonDetails(context, person),
+      child: Tooltip(
+        message: person.name,
         child: Container(
-          key: key,
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: paddingVertical),
+          width: isRoot ? 80 : 60,
+          height: isRoot ? 80 : 60,
           decoration: BoxDecoration(
-            color: pathToRoot.contains(norm)
-                ? Colors.green.shade300
-                : isChild
-                ? Colors.lightBlue.shade100
-                : Colors.yellow.shade300,
-            borderRadius: BorderRadius.circular(12),
+            color: color,
+            shape: BoxShape.circle,
             border: Border.all(
-              color: norm == highlightedName ? Colors.transparent : Colors.transparent,  // No red border
-              width: norm == highlightedName ? 2 : 0,
+              color: isHighlighted ? Colors.yellow : Colors.white,
+              width: isHighlighted ? 4 : 2,
             ),
-            boxShadow: [BoxShadow(blurRadius: 3, color: Colors.grey.shade400)],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 5),
-              SizedBox(
-                width: 150,
-                child: Text(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize),
-                ),
-              ),
+            boxShadow: [
+              BoxShadow(
+                color: isHighlighted
+                    ? Colors.yellow.withOpacity(0.6)
+                    : Colors.black.withOpacity(0.2),
+                blurRadius: isHighlighted ? 10 : 5,
+                spreadRadius: isHighlighted ? 2 : 1,
+              )
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-
-
-
-  void _highlightChildren(String parent) {
-    if (_treeMap.containsKey(parent)) {
-      for (var c in _treeMap[parent]!) {
-        highlightedChildren.add(c);
-        _highlightChildren(c);
-      }
-    }
-  }
-
-  void _showTooltip(BuildContext ctx, String name, GlobalKey key) {
-    final norm = name.trim().toLowerCase();
-    final p = personMap[norm];
-    if (p == null) return;
-
-    final rb = key.currentContext?.findRenderObject() as RenderBox?;
-    if (rb == null) return;
-
-    final pos = rb.localToGlobal(Offset.zero);
-    final sz = rb.size;
-    final screenSize = MediaQuery.of(ctx).size;
-
-    const double tooltipWidth = 240;
-    const double tooltipHeight = 160;
-
-    double left = pos.dx + sz.width / 2 - tooltipWidth / 2;
-    double top = pos.dy - tooltipHeight;
-
-    // Keep tooltip within screen boundaries
-    if (left < 10) left = 10;
-    if (left + tooltipWidth > screenSize.width) left = screenSize.width - tooltipWidth - 10;
-    if (top < 10) top = pos.dy + sz.height + 10;
-
-    _overlayEntry?.remove();
-    _overlayEntry = OverlayEntry(
-      builder: (_) => Positioned(
-        left: left,
-        top: top,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: tooltipWidth,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _tooltipRow('Name', p.name),
-                _tooltipRow('Father', p.fatherName),
-                _tooltipRow('Grandfather', p.grandfatherName),
-                _tooltipRow('Mother', p.motherName),
-                _tooltipRow('ID', p.id),
-                if (p.notes.isNotEmpty) _tooltipRow('Notes', p.notes),
-                _tooltipRow('Important', p.isimp ? 'Yes' : 'No', isHighlight: p.isimp),
-                const SizedBox(height: 6),
-                Text('Long press to trace to root',
-                    style: TextStyle(color: Colors.green.shade300, fontSize: 12)),
-              ],
+          child: Center(
+            child: Text(
+              _getShortName(person.name),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: isRoot ? 14 : 12,
+              ),
             ),
           ),
         ),
       ),
     );
-
-    Overlay.of(ctx)?.insert(_overlayEntry!);
-    Future.delayed(const Duration(seconds: 5), () {
-      _overlayEntry?.remove();
-      _overlayEntry = null;
-    });
   }
 
-  Widget _tooltipRow(String label, String value, {bool isHighlight = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: RichText(
-        text: TextSpan(
+
+  void _showPersonDetails(BuildContext context, Person person) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(person.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextSpan(
-              text: '$label: ',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            TextSpan(
-              text: value,
-              style: TextStyle(
-                color: isHighlight ? Colors.orangeAccent : Colors.white,
-              ),
-            ),
+            Text('ID: ${person.id}'),
+            const SizedBox(height: 8),
+            Text('Father: ${person.fatherName.trim().isEmpty ? 'Root Member' : person.fatherName}'),
+            const SizedBox(height: 8),
+            Text('Generation: ${_calculateGeneration(person.name) + 1}'),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
-  }
-
-
-
-  void _searchAndHighlight(String term) {
-    final n = term.trim().toLowerCase();
-    if (nodeMap.containsKey(n)) {
-      setState(() {
-        highlightedName = n;
-        highlightedChildren.clear();
-        pathToRoot.clear();
-        _highlightChildren(n);
-      });
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Person "$term" not found')));
-    }
-  }
-
-  Future<Uint8List> _captureFullGraph() async {
-    RenderRepaintBoundary boundary = _previewContainer.currentContext?.findRenderObject() as RenderRepaintBoundary;
-    if (boundary.debugNeedsPaint) {
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
-
-    final image = await boundary.toImage(pixelRatio: 3.0);
-    final byteData = await image.toByteData(format: ImageByteFormat.png);
-    return byteData!.buffer.asUint8List();
   }
 
   Future<void> _exportGraphAsPdf() async {
     try {
-      setState(() {
-        loading = true;
-      });
+      RenderRepaintBoundary boundary =
+      _graphKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
 
-      final bytes = await _captureFullGraph();
-      final pdf = pw.Document();
-      final now = DateTime.now();
-      final formattedDate = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+      final doc = pw.Document();
+      final imagePdf = pw.MemoryImage(pngBytes);
 
-      pdf.addPage(
+      doc.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4.landscape,
-          build: (ctx) => pw.Padding(
-            padding: const pw.EdgeInsets.all(24),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
-              children: [
-                // 🔝 Title and Date at the top
-                pw.Text(
-                  'Usmani Family Shijra',
-                  style: pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold),
-                ),
-                pw.SizedBox(height: 5),
-                pw.Text(
-                  'Generated on: $formattedDate',
-                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
-                ),
-                pw.SizedBox(height: 20),
-
-                // 📊 Graph Image in Center
-                pw.Expanded(
-                  child: pw.Center(
-                    child: pw.Image(pw.MemoryImage(bytes), fit: pw.BoxFit.contain),
-                  ),
-                ),
-
-                pw.SizedBox(height: 20),
-                pw.Divider(),
-
-                // 👨‍💻 Developer Info at bottom
-                pw.Align(
-                  alignment: pw.Alignment.centerLeft,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Developed by:',
-                          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Umar Farooq', style: pw.TextStyle(fontSize: 12)),
-                      pw.Text('Muhammad Faaez Usmani', style: pw.TextStyle(fontSize: 12)),
-                      pw.SizedBox(height: 6),
-                      pw.Text('App: Usmani Family Shijra App (v1.0) - Android',
-                          style: pw.TextStyle(fontSize: 12)),
-                      pw.Text('Contact: uummeerr0786@gmail.com',
-                          style: pw.TextStyle(fontSize: 12)),
-                      pw.Text('Portfolio: https://umerfarooq003.web.app/',
-                          style: pw.TextStyle(fontSize: 12, color: PdfColors.blue)),
-                      pw.SizedBox(height: 10),
-                      pw.Text(
-                        'Note: This shijra is auto-generated. Please verify details manually if required.',
-                        style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          build: (pw.Context context) {
+            return pw.Center(child: pw.Image(imagePdf));
+          },
         ),
       );
-      await Printing.layoutPdf(onLayout: (fmt) => pdf.save());
+
+      await Printing.layoutPdf(onLayout: (format) async => doc.save());
     } catch (e) {
-      debugPrint("Error exporting PDF: $e");
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to export PDF')));
-    } finally {
-      setState(() {
-        loading = false;
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating PDF: $e')),
+      );
     }
   }
 
   @override
-  Widget build(BuildContext ctx) {
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(60),
-        child: AppBar(
-          backgroundColor: Colors.teal,
-          centerTitle: true,
-          title: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Text(
-                'Usmani Family Shajra',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 4),
-              Align(
-                alignment: Alignment.center,
-                child: Text(
-                  'For Addition in Shajra\nFaaez Usmani 0306-1234567',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
+      appBar: AppBar(
+        title: const Text('Usmani Family Tree'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('Color Guide'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(generationColors.length, (index) {
+                    final label = index == 0
+                        ? 'Generation ${index + 1} (Root)'
+                        : 'Generation ${index + 1}';
+                    return _buildColorLegend(label, generationColors[index]);
+                  }),
                 ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('OK'),
+                  ),
+                ],
               ),
-
-
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: loadGraph,
-              tooltip: 'refresh graph',
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+
       drawer: Drawer(
-        child: Column(
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: [
             const DrawerHeader(
-              decoration: const BoxDecoration(color: Colors.blue),
-              margin: EdgeInsets.zero,
-              padding: EdgeInsets.zero,
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Menu', style: TextStyle(color: Colors.white, fontSize: 24)),
-                      SizedBox(height: 5)
-                    ],
-                  ),
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
+              child: Text(
+                'Menu',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
                 ),
               ),
             ),
+            ListTile(
+              leading: const Icon(Icons.search),
+              title: const Text('Search Family Member'),
+              onTap: () async {
+                Navigator.pop(context); // close the drawer first
+                final result = await showSearch(
+                  context: context,
+                  delegate: FamilyMemberSearchDelegate(_personMap.keys.toList()),
+                );
+                if (result != null && _addedNodes.contains(result.toLowerCase())) {
+                  _highlightedNodes.clear();
+                  _highlightedNodes.add(result.toLowerCase());
+                  setState(() {});
+                }
 
-
-            // ListTiles
-            Expanded(
-              child: ListView(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.search),
-                    title: const Text('Search Family Member'),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final res = await showSearch<String?>(
-                          context: ctx,
-                          delegate: FamilyMemberSearchDelegate(nodeMap));
-                      if (res != null) _searchAndHighlight(res);
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.print),
-                    title: const Text('Export as PDF'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _exportGraphAsPdf();
-                    },
-                  ),
-
-
-                  if (_isAdmin) ...[
-                    ListTile(
-                      leading: const Icon(Icons.group_add),
-                      title: const Text('Add Family Member'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.pushNamed(ctx, '/add');
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.delete),
-                      title: const Text('Delete Family Member'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.pushNamed(ctx, '/delete');
-                      },
-                    ),
-
-                    ListTile(
-                      leading: const Icon(Icons.info),
-                      title: const Text('About'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const AboutPage()),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.logout),
-                      title: const Text('Logout'),
-                      onTap: () async {
-                        final s = FlutterSecureStorage();
-                        await s.delete(key: 'admin_token');
-                        Navigator.pushReplacement(
-                            ctx, MaterialPageRoute(builder: (_) => const LoginPage()));
-                      },
-                    ),
-                  ],
-                ],
-              ),
+              },
             ),
-
-            // Developer Info at the bottom
-            const Divider(),
-            Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Column(
-                children: const [
-                  Text('Developed by', style: TextStyle(fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text('Umar Farooq'),
-                  Text('Muhammad Faaez Usmani'),
-                ],
-              ),
+            ListTile(
+              leading: const Icon(Icons.print),
+              title: const Text('Export as PDF'),
+              onTap: () {
+                Navigator.pop(context); // close the drawer
+                _exportGraphAsPdf();
+              },
             ),
           ],
         ),
       ),
 
-      body: loading
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Column(children: [
-        Expanded(
-          child: InteractiveViewer(
-            transformationController: _transformationController,
-            constrained: false,
-            boundaryMargin: const EdgeInsets.all(100),
-            minScale: 0.1,
-            maxScale: 10,
-            scaleEnabled: false, // 👉 disable pinch-to-zoom
-            child: RepaintBoundary(
-              key: _previewContainer,
-              child: graph.nodes.isEmpty
-                  ? const Center(child: Text("No family data available"))
-                  : GraphView(
-                graph: graph,
-                algorithm: BuchheimWalkerAlgorithm(builder, TreeEdgeRenderer(builder)),
-                builder: (node) {
-                  final name = node.key?.value.toString() ?? '';
-                  return _nodeWidget(
-                    name,
-                    isChild: highlightedChildren.contains(name.trim().toLowerCase()),
-                  );
-                },
-              ),
-            ),
+          : RepaintBoundary(
+        key: _graphKey,
+        child: ForceDirectedGraphWidget<String>(
+          controller: _controller,
+          nodesBuilder: _nodeBuilder,
+          edgesBuilder: (ctx, a, b, distance) => Container(
+            width: distance,
+            height: 1.5,
+            color: Colors.grey.withOpacity(0.5),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Container(
+      ),
+    );
+  }
+
+
+  Widget _buildColorLegend(String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
             decoration: BoxDecoration(
-              color: Colors.grey, // 👈 Set your background color here
-              borderRadius: BorderRadius.circular(12), // Optional: rounded corners
-            ),
-            padding: const EdgeInsets.all(8.0), // Optional: internal padding
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                FloatingActionButton(
-                  heroTag: 'zoomIn',
-                  mini: true,
-                  onPressed: () {
-                    setState(() {
-                      _transformationController.value =
-                      _transformationController.value.clone()..scale(1.2);
-                    });
-                  },
-                  child: const Icon(Icons.zoom_in),
-                ),
-                const SizedBox(width: 20),
-                FloatingActionButton(
-                  heroTag: 'zoomOut',
-                  mini: true,
-                  onPressed: () {
-                    setState(() {
-                      _transformationController.value =
-                      _transformationController.value.clone()..scale(0.8);
-                    });
-                  },
-                  child: const Icon(Icons.zoom_out),
-                ),
-                const SizedBox(width: 20),
-                FloatingActionButton(
-                  heroTag: 'resetZoom',
-                  mini: true,
-                  onPressed: () {
-                    setState(() {
-                      _transformationController.value = Matrix4.identity()..scale(0.7);
-                    });
-                  },
-                  child: const Icon(Icons.refresh),
-                ),
-                const SizedBox(width: 20),
-                FloatingActionButton(
-                  heroTag: 'clearPath',
-                  mini: true,
-                  onPressed: () {
-                    setState(() {
-                      pathToRoot.clear();
-                    });
-                  },
-                  child: const Icon(Icons.clear_all),
-                ),
-              ],
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white),
             ),
           ),
-        ),
-      ]),
+          const SizedBox(width: 10),
+          Text(text),
+        ],
+      ),
     );
   }
 }
 
-class FamilyMemberSearchDelegate extends SearchDelegate<String?> {
-  final Map<String, Node> nodeMap;
-  FamilyMemberSearchDelegate(this.nodeMap);
+class FamilyMemberSearchDelegate extends SearchDelegate<String> {
+  final List<String> names;
+
+  FamilyMemberSearchDelegate(this.names);
 
   @override
-  Widget buildLeading(BuildContext ctx) =>
-      IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(ctx, null));
+  List<Widget> buildActions(BuildContext context) => [
+    IconButton(
+      icon: const Icon(Icons.clear),
+      onPressed: () => query = '',
+    )
+  ];
 
   @override
-  List<Widget> buildActions(BuildContext ctx) =>
-      [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
+  Widget buildLeading(BuildContext context) => IconButton(
+    icon: const Icon(Icons.arrow_back),
+    onPressed: () => close(context, ''),
+  );
 
   @override
-  Widget buildSuggestions(BuildContext ctx) => _buildList();
-
-  @override
-  Widget buildResults(BuildContext ctx) => _buildList();
-
-  Widget _buildList() {
-    final hits = nodeMap.keys
-        .where((n) => n.contains(query.toLowerCase()))
+  Widget buildResults(BuildContext context) {
+    final results = names
+        .where((name) => name.toLowerCase().contains(query.toLowerCase()))
         .toList();
 
-    if (hits.isEmpty) {
-      return const Center(child: Text('No matching results found.'));
-    }
     return ListView.builder(
-        itemCount: hits.length,
-        itemBuilder: (ctx, i) => ListTile(
-          title: Text(hits[i]),
-          onTap: () => close(ctx, hits[i]),
-        ));
+      itemCount: results.length,
+      itemBuilder: (context, index) {
+        final name = results[index];
+        return ListTile(
+          title: Text(name),
+          onTap: () => close(context, name),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    final suggestions = names
+        .where((name) => name.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+
+    return ListView.builder(
+      itemCount: suggestions.length,
+      itemBuilder: (context, index) {
+        final name = suggestions[index];
+        return ListTile(
+          title: Text(name),
+          onTap: () => close(context, name),
+        );
+      },
+    );
   }
 }
