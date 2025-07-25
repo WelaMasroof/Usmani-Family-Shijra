@@ -7,7 +7,7 @@ Future<ValueNotifier<GraphQLClient>> initGraphQLClient() async {
   final token = prefs.getString('jwt');
 
   final authLink = AuthLink(getToken: () async => 'Bearer $token');
-  final httpLink = HttpLink('https://fast-api-shijra-2008non12-faaezs-projects-373a7c11.vercel.app/graphql');
+  final httpLink = HttpLink('https://fast-api-shijra.vercel.app/graphql');
 
   final link = authLink.concat(httpLink);
 
