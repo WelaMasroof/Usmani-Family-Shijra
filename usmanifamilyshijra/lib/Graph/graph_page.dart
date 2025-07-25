@@ -1,7 +1,18 @@
+import 'dart:typed_data';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:graphview/GraphView.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import '../API/api_service.dart';
 import '../models/person.dart';
+import '../splash screen/About Page.dart';
+import 'package:image/image.dart' as img;
+
+
 
 class GraphPage extends StatefulWidget {
   const GraphPage({super.key});
@@ -11,25 +22,45 @@ class GraphPage extends StatefulWidget {
 }
 
 class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
-  final Graph graph = Graph()..isTree = true;
-  final BuchheimWalkerConfiguration builder = BuchheimWalkerConfiguration();
+  final Graph graph = Graph();
+  late BuchheimWalkerConfiguration builder;
+  final GlobalKey _previewContainer = GlobalKey();
 
   Map<String, Node> nodeMap = {};
   Map<String, Person> personMap = {};
-  final Map<String, AnimationController> _animationControllers = {};
+  Map<String, AnimationController> _animationControllers = {};
   OverlayEntry? _overlayEntry;
 
   bool loading = true;
   String? highlightedName;
-
+  Set<String> highlightedChildren = {};
+  Set<String> pathToRoot = {};
+  Map<String, List<String>> _treeMap = {};
   final TransformationController _transformationController = TransformationController();
-  final GlobalKey _graphKey = GlobalKey();
   final TextEditingController _searchController = TextEditingController();
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    loadGraph();
+    builder = BuchheimWalkerConfiguration()
+      ..siblingSeparation = 25
+      ..levelSeparation = 60
+      ..subtreeSeparation = 25
+      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
+
+    _transformationController.value = Matrix4.identity()..scale(0.7);
+    _checkIfAdmin().then((_) => loadGraph());
+  }
+
+  Future<void> _checkIfAdmin() async {
+    final storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'admin_token');
+    if (token != null) {
+      setState(() {
+        _isAdmin = true;
+      });
+    }
   }
 
   @override
@@ -37,236 +68,711 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
     _overlayEntry?.remove();
     _transformationController.dispose();
     _searchController.dispose();
-    for (var controller in _animationControllers.values) {
-      controller.dispose();
+    for (var c in _animationControllers.values) {
+      c.dispose();
     }
     super.dispose();
   }
 
   Future<void> loadGraph() async {
+    setState(() {
+      loading = true;
+      graph.edges.clear();
+      graph.nodes.clear();
+      nodeMap.clear();
+      personMap.clear();
+      _treeMap.clear();
+      _animationControllers.clear();
+      pathToRoot.clear();
+    });
+
     try {
       final persons = await ApiService.fetchPersons();
-      final Map<String, List<String>> treeMap = {};
-      String normalize(String value) => value.trim().toLowerCase();
+      Map<String, List<String>> treeMap = {};
+      String normalize(String s) => s.trim().toLowerCase();
 
-      for (var person in persons) {
-        final child = normalize(person.name);
-        final father = normalize(person.fatherName);
-
+      for (var p in persons) {
+        final child = normalize(p.name);
+        final father = normalize(p.fatherName);
         if (father.isNotEmpty) {
           treeMap[father] ??= [];
           treeMap[father]!.add(child);
         }
-
-        personMap[child] = person;
+        personMap[child] = p;
       }
 
-      for (var person in persons) {
-        final normalizedName = normalize(person.name);
-        nodeMap[normalizedName] = Node.Id(person.name);
-        _animationControllers[normalizedName] = AnimationController(
+      _treeMap = treeMap;
+
+      for (var p in persons) {
+        final nameKey = normalize(p.name);
+        nodeMap[nameKey] = Node.Id(p.name);
+        _animationControllers[nameKey] = AnimationController(
           vsync: this,
           duration: const Duration(milliseconds: 300),
           lowerBound: 0.9,
           upperBound: 1.1,
         )..addStatusListener((status) {
           if (status == AnimationStatus.completed) {
-            _animationControllers[normalizedName]!.reverse();
+            _animationControllers[nameKey]?.reverse();
           }
         });
       }
 
       for (var entry in treeMap.entries) {
         final fatherNode = nodeMap[entry.key];
-        for (var childKey in entry.value) {
-          final childNode = nodeMap[childKey];
+        for (var c in entry.value) {
+          final childNode = nodeMap[c];
           if (fatherNode != null && childNode != null) {
             graph.addEdge(fatherNode, childNode);
           }
         }
       }
 
-      setState(() => loading = false);
+      setState(() {
+        loading = false;
+      });
     } catch (e) {
-      debugPrint('Error loading graph: $e');
-      setState(() => loading = false);
+      debugPrint("Error loading graph: $e");
+      setState(() {
+        loading = false;
+      });
     }
   }
 
-  void _showTooltip(BuildContext context, String name, GlobalKey key) {
-    final normalizedName = name.trim().toLowerCase();
-    final person = personMap[normalizedName];
-    if (person == null) return;
+  void _highlightPathToRoot(String nodeName) {
+    final norm = nodeName.trim().toLowerCase();
+    pathToRoot.clear();
 
-    final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
+    String current = norm;
+    bool foundRoot = false;
 
-    final position = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
+    // Trace upwards until we can't find a parent
+    while (!foundRoot) {
+      pathToRoot.add(current);
+
+      // Find parent of current node
+      String? parent;
+      for (var entry in _treeMap.entries) {
+        if (entry.value.contains(current)) {
+          parent = entry.key;
+          break;
+        }
+      }
+
+      if (parent == null) {
+        foundRoot = true; // Reached the root
+      } else {
+        current = parent;
+      }
+    }
+
+    setState(() {});
+  }
+
+  Widget _nodeWidget(String name, {bool isChild = false}) {
+    final key = GlobalKey();
+    final norm = name.trim().toLowerCase();
+    final controller = _animationControllers[norm];
+    final person = personMap[norm];
+    final isImportant = person?.isimp ?? false;
+
+    // True size difference
+    final double boxWidth = isImportant ? 155 : 140;
+    final double fontSize = isImportant ? 14 : 13;
+    final double iconSize = isImportant ? 26 : 24;
+    final double paddingVertical = isImportant ? 8 : 6;
+    final double scaleFactor = isImportant ? 1.2 : 1.0;
+
+
+    return GestureDetector(
+      onLongPress: () {
+        _highlightPathToRoot(norm);
+        setState(() {
+          highlightedName = norm;
+          highlightedChildren.clear();
+        });
+      },
+      onTap: () {
+        controller?.forward();
+        _showTooltip(context, name, key);
+        setState(() {
+          highlightedName = norm;
+          highlightedChildren.clear();
+          pathToRoot.clear();
+          _highlightChildren(norm);
+        });
+      },
+      child: AnimatedBuilder(
+        animation: controller ?? AnimationController(vsync: this),
+        builder: (ctx, child) => Transform.scale(
+          scale: (controller?.value ?? 1.0) * scaleFactor,  // Applying scale here
+          child: child,
+        ),
+        child: Container(
+          key: key,
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: paddingVertical),
+          decoration: BoxDecoration(
+            color: pathToRoot.contains(norm)
+                ? Colors.green.shade300
+                : isChild
+                ? Colors.lightBlue.shade100
+                : Colors.yellow.shade300,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: norm == highlightedName ? Colors.transparent : Colors.transparent,  // No red border
+              width: norm == highlightedName ? 2 : 0,
+            ),
+            boxShadow: [BoxShadow(blurRadius: 3, color: Colors.grey.shade400)],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 5),
+              SizedBox(
+                width: 150,
+                child: Text(
+                  name,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+
+
+  void _highlightChildren(String parent) {
+    if (_treeMap.containsKey(parent)) {
+      for (var c in _treeMap[parent]!) {
+        highlightedChildren.add(c);
+        _highlightChildren(c);
+      }
+    }
+  }
+
+  void _showTooltip(BuildContext ctx, String name, GlobalKey key) {
+    final norm = name.trim().toLowerCase();
+    final p = personMap[norm];
+    if (p == null) return;
+
+    final rb = key.currentContext?.findRenderObject() as RenderBox?;
+    if (rb == null) return;
+
+    final pos = rb.localToGlobal(Offset.zero);
+    final sz = rb.size;
+    final screenSize = MediaQuery.of(ctx).size;
+
+    const double tooltipWidth = 240;
+    const double tooltipHeight = 160;
+
+    double left = pos.dx + sz.width / 2 - tooltipWidth / 2;
+    double top = pos.dy - tooltipHeight;
+
+    // Keep tooltip within screen boundaries
+    if (left < 10) left = 10;
+    if (left + tooltipWidth > screenSize.width) left = screenSize.width - tooltipWidth - 10;
+    if (top < 10) top = pos.dy + sz.height + 10;
 
     _overlayEntry?.remove();
     _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: position.dx + size.width / 2 - 100,
-        top: position.dy - 70,
+      builder: (_) => Positioned(
+        left: left,
+        top: top,
         child: Material(
           color: Colors.transparent,
-          child: AnimatedOpacity(
-            opacity: 1,
-            duration: const Duration(milliseconds: 300),
-            child: Container(
-              width: 200,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.85),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Name: ${person.name}', style: const TextStyle(color: Colors.white)),
-                  Text('Father: ${person.fatherName}', style: const TextStyle(color: Colors.white)),
-                  Text('ID: ${person.id}', style: const TextStyle(color: Colors.white)),
-                ],
-              ),
+          child: Container(
+            width: tooltipWidth,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _tooltipRow('Name', p.name),
+                _tooltipRow('Father', p.fatherName),
+                _tooltipRow('Grandfather', p.grandfatherName),
+                _tooltipRow('Mother', p.motherName),
+                _tooltipRow('ID', p.id),
+                if (p.notes.isNotEmpty) _tooltipRow('Notes', p.notes),
+                _tooltipRow('Important', p.isimp ? 'Yes' : 'No', isHighlight: p.isimp),
+                const SizedBox(height: 6),
+                Text('Long press to trace to root',
+                    style: TextStyle(color: Colors.green.shade300, fontSize: 12)),
+              ],
             ),
           ),
         ),
       ),
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
-
+    Overlay.of(ctx)?.insert(_overlayEntry!);
     Future.delayed(const Duration(seconds: 5), () {
       _overlayEntry?.remove();
       _overlayEntry = null;
     });
   }
 
-  Widget _nodeWidget(String name) {
-    final normalizedName = name.trim().toLowerCase();
-    final key = GlobalKey();
-
-    return GestureDetector(
-      onTap: () {
-        final controller = _animationControllers[normalizedName];
-        controller?.forward();
-        _showTooltip(context, name, key);
-        setState(() {
-          highlightedName = normalizedName;
-        });
-      },
-      child: AnimatedBuilder(
-        animation: _animationControllers[normalizedName]!,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _animationControllers[normalizedName]!.value,
-            child: child,
-          );
-        },
-        child: Container(
-          key: key,
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.amberAccent,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: normalizedName == highlightedName ? Colors.red : Colors.transparent,
-              width: 3,
+  Widget _tooltipRow(String label, String value, {bool isHighlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 4,
-                color: Colors.grey.shade300,
-              ),
-            ],
-          ),
-          child: SizedBox(
-            width: 160,
-            child: Text(
-              name,
-              textAlign: TextAlign.center,
-              softWrap: true,
-              overflow: TextOverflow.visible,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color: isHighlight ? Colors.orangeAccent : Colors.white,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  void _searchAndHighlight(String searchTerm) {
-    String normalized = searchTerm.trim().toLowerCase();
-    if (nodeMap.containsKey(normalized)) {
-      setState(() {
-        highlightedName = normalized;
-      });
 
-      // Optional: you could scroll here by modifying the transformation controller.
-      // Currently, InteractiveViewer doesn't support jumping to child offset easily.
+
+  void _searchAndHighlight(String term) {
+    final n = term.trim().toLowerCase();
+    if (nodeMap.containsKey(n)) {
+      setState(() {
+        highlightedName = n;
+        highlightedChildren.clear();
+        pathToRoot.clear();
+        _highlightChildren(n);
+      });
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Person "$searchTerm" not found')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Person "$term" not found')));
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    builder
-      ..siblingSeparation = 25
-      ..levelSeparation = 60
-      ..subtreeSeparation = 25
-      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
+  Future<Uint8List> _captureFullGraph() async {
+    RenderRepaintBoundary boundary = _previewContainer.currentContext?.findRenderObject() as RenderRepaintBoundary;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Usmani Family Shijra"),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: "Search by name...",
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                fillColor: Colors.white,
-                filled: true,
-              ),
-              onSubmitted: _searchAndHighlight,
+    if (boundary.debugNeedsPaint) {
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
+    final image = await boundary.toImage(pixelRatio: 2.0); // Balanced for quality + performance
+    final byteData = await image.toByteData(format: ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+
+  Future<void> _exportGraphAsPdf() async {
+    try {
+      setState(() => loading = true);
+
+      final bytes = await _captureFullGraph();
+      final originalImage = img.decodeImage(bytes);
+      if (originalImage == null) throw Exception("Image decoding failed");
+
+      final pdf = pw.Document();
+
+      // Constants
+      const sliceHeight = 2200;
+      int y = 0;
+      final totalSlices = (originalImage.height / sliceHeight).ceil();
+      final totalPages = totalSlices + 1; // Title page + graph pages
+      final now = DateTime.now();
+      final formattedDate =
+          '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+
+      int pageNumber = 1;
+
+      // ➤ Page 1: Title & Developer Info
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a3,
+          build: (ctx) => pw.Center(
+            child: pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                pw.Text(
+                  'Usmani Family Shijra',
+                  style: pw.TextStyle(fontSize: 36, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 20),
+                pw.Text(
+                  'Generated on: $formattedDate',
+                  style: pw.TextStyle(fontSize: 16, color: PdfColors.grey700),
+                ),
+                pw.SizedBox(height: 40),
+                pw.Text(
+                  'Developed by',
+                  style: pw.TextStyle(fontSize: 30, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 30),
+                pw.Text(
+                  'Umar Farooq',
+                  style: pw.TextStyle(fontSize: 24),
+                ),
+                pw.Text(
+                  'Muhammad Faaez Usmani',
+                  style: pw.TextStyle(fontSize: 24),
+                ),
+                pw.SizedBox(height: 40),
+                pw.Text(
+                  'Usmani Family Shijra App (v1.0) Android',
+                  style: pw.TextStyle(fontSize: 18),
+                ),
+                pw.SizedBox(height: 15),
+                pw.Text(
+                  'Contact: uummeerr0786@gmail.com',
+                  style: pw.TextStyle(fontSize: 16),
+                ),
+                pw.UrlLink(
+                  destination: 'https://umerfarooq003.web.app/',
+                  child: pw.Text(
+                    'Portfolio: umerfarooq003.web.app',
+                    style: pw.TextStyle(fontSize: 16, color: PdfColors.blue),
+                  ),
+                ),
+                pw.SizedBox(height: 40),
+                pw.Text(
+                  'Note:',
+                  style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text(
+                  'This shijra is auto-generated.\nPlease verify details manually if required.',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700),
+                ),
+                pw.SizedBox(height: 60),
+                pw.Text(
+                  'Page $pageNumber of $totalPages',
+                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                ),
+              ],
             ),
           ),
         ),
-      ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : InteractiveViewer(
-        key: _graphKey,
-        transformationController: _transformationController,
-        constrained: false,
-        boundaryMargin: const EdgeInsets.all(100),
-        minScale: 0.1,
-        maxScale: 10,
-        panEnabled: true,
-        scaleEnabled: true,
-        child: GraphView(
-          graph: graph,
-          algorithm: BuchheimWalkerAlgorithm(builder, TreeEdgeRenderer(builder)),
-          builder: (Node node) {
-            final key = node.key;
-            if (key == null || key.value == null) {
-              return const Text('Unknown');
-            }
-            return _nodeWidget(key.value.toString());
-          },
+      );
+
+      pageNumber++;
+
+      // ➤ Pages 2 to N: Graph slices
+      while (y < originalImage.height) {
+        final height = (y + sliceHeight > originalImage.height)
+            ? originalImage.height - y
+            : sliceHeight;
+
+        final slice = img.copyCrop(
+          originalImage,
+          x: 0,
+          y: y,
+          width: originalImage.width,
+          height: height,
+        );
+
+        final sliceBytes = Uint8List.fromList(img.encodePng(slice));
+
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a3,
+            build: (ctx) => pw.Padding(
+              padding: const pw.EdgeInsets.all(20),
+              child: pw.Column(
+                children: [
+                  pw.Expanded(
+                    child: pw.Center(
+                      child: pw.Image(
+                        pw.MemoryImage(sliceBytes),
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'Page $pageNumber of $totalPages',
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        y += sliceHeight;
+        pageNumber++;
+      }
+
+      await Printing.layoutPdf(onLayout: (_) async => pdf.save());
+    } catch (e) {
+      debugPrint("Error exporting PDF: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export PDF')),
+      );
+    } finally {
+      setState(() => loading = false);
+    }
+  }
+
+
+
+
+  @override
+  Widget build(BuildContext ctx) {
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          backgroundColor: Colors.teal,
+          centerTitle: true,
+          title: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Text(
+                'Usmani Family Shajra',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 4),
+              Align(
+                alignment: Alignment.center,
+                child: Text(
+                  'For Addition in Shajra\nFaaez Usmani 0306-1234567',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: loadGraph,
+              tooltip: 'refresh graph',
+            ),
+          ],
         ),
       ),
+      drawer: Drawer(
+        child: Column(
+          children: [
+            const DrawerHeader(
+              decoration: const BoxDecoration(color: Colors.blue),
+              margin: EdgeInsets.zero,
+              padding: EdgeInsets.zero,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('Menu', style: TextStyle(color: Colors.white, fontSize: 24)),
+                      SizedBox(height: 5)
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+
+            // ListTiles
+            Expanded(
+              child: ListView(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.search),
+                    title: const Text('Search Family Member'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      final res = await showSearch<String?>(
+                          context: ctx,
+                          delegate: FamilyMemberSearchDelegate(nodeMap));
+                      if (res != null) _searchAndHighlight(res);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.print),
+                    title: const Text('Export as PDF'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _exportGraphAsPdf();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.info),
+                    title: const Text('About'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AboutPage()),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.group_add),
+                    title: const Text('Login'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(ctx, '/login');
+                    },
+                  ),
+
+                ],
+              ),
+            ),
+
+            // Developer Info at the bottom
+            const Divider(),
+            Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Column(
+                children: const [
+                  Text('Developed by', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 4),
+                  Text('Umar Farooq'),
+                  Text('Muhammad Faaez Usmani'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(children: [
+        Expanded(
+          child: InteractiveViewer(
+            transformationController: _transformationController,
+            constrained: false,
+            boundaryMargin: const EdgeInsets.all(100),
+            minScale: 0.1,
+            maxScale: 10,
+            scaleEnabled: false, // 👉 disable pinch-to-zoom
+            child: RepaintBoundary(
+              key: _previewContainer,
+              child: graph.nodes.isEmpty
+                  ? const Center(child: Text("No family data available"))
+                  : GraphView(
+                graph: graph,
+                algorithm: BuchheimWalkerAlgorithm(builder, TreeEdgeRenderer(builder)),
+                builder: (node) {
+                  final name = node.key?.value.toString() ?? '';
+                  return _nodeWidget(
+                    name,
+                    isChild: highlightedChildren.contains(name.trim().toLowerCase()),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey, // 👈 Set your background color here
+              borderRadius: BorderRadius.circular(12), // Optional: rounded corners
+            ),
+            padding: const EdgeInsets.all(8.0), // Optional: internal padding
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'zoomIn',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      _transformationController.value =
+                      _transformationController.value.clone()..scale(1.2);
+                    });
+                  },
+                  child: const Icon(Icons.zoom_in),
+                ),
+                const SizedBox(width: 20),
+                FloatingActionButton(
+                  heroTag: 'zoomOut',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      _transformationController.value =
+                      _transformationController.value.clone()..scale(0.8);
+                    });
+                  },
+                  child: const Icon(Icons.zoom_out),
+                ),
+                const SizedBox(width: 20),
+                FloatingActionButton(
+                  heroTag: 'resetZoom',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      _transformationController.value = Matrix4.identity()..scale(0.7);
+                    });
+                  },
+                  child: const Icon(Icons.refresh),
+                ),
+                const SizedBox(width: 20),
+                FloatingActionButton(
+                  heroTag: 'clearPath',
+                  mini: true,
+                  onPressed: () {
+                    setState(() {
+                      pathToRoot.clear();
+                    });
+                  },
+                  child: const Icon(Icons.clear_all),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ]),
     );
+  }
+}
+
+class FamilyMemberSearchDelegate extends SearchDelegate<String?> {
+  final Map<String, Node> nodeMap;
+  FamilyMemberSearchDelegate(this.nodeMap);
+
+  @override
+  Widget buildLeading(BuildContext ctx) =>
+      IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(ctx, null));
+
+  @override
+  List<Widget> buildActions(BuildContext ctx) =>
+      [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
+
+  @override
+  Widget buildSuggestions(BuildContext ctx) => _buildList();
+
+  @override
+  Widget buildResults(BuildContext ctx) => _buildList();
+
+  Widget _buildList() {
+    final hits = nodeMap.keys
+        .where((n) => n.contains(query.toLowerCase()))
+        .toList();
+
+    if (hits.isEmpty) {
+      return const Center(child: Text('No matching results found.'));
+    }
+    return ListView.builder(
+        itemCount: hits.length,
+        itemBuilder: (ctx, i) => ListTile(
+          title: Text(hits[i]),
+          onTap: () => close(ctx, hits[i]),
+        ));
   }
 }
