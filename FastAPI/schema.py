@@ -31,9 +31,9 @@ class Person:
     father_name: Optional[str]
     grandfather_name: Optional[str]
     gender: str
-    mother_name: Optional[str]
+    mother_name: Optional[str]=""
     isimp: Optional[bool]
-    notes: Optional[str]
+    notes: Optional[str]=""
 
 @strawberry.type
 class Ancestor:
@@ -135,26 +135,31 @@ class Mutation:
                     raise Exception(f"A similar person '{existing_name}' already exists with the same father name")
 
             result = session.run("""
-                CREATE (p:Person {
-                    id: randomUUID(),
-                    name: $name,
-                    gender: $gender,
-                    father_name: $father_name,
-                    grandfather_name: $grandfather_name,
-                    mother_name: $mother_name,
-                    isimp: $isimp,
-                    notes: $notes
-                })
-                RETURN p
-            """, {
-                "name": person.name,
-                "gender": person.gender,
-                "father_name": person.father_name,
-                "grandfather_name": person.grandfather_name,
-                "mother_name": person.mother_name,
-                "isimp": person.isimp,
-                "notes": person.notes
-            })
+    match (c:Counter {name: "person_id_counter"})
+    set c.value = c.value + 1
+    with c.value as new_id
+    create (p:Person {
+        id: toString(new_id),
+        name: $name,
+        gender: $gender,
+        father_name: $father_name,
+        grandfather_name: $grandfather_name,
+        mother_name: $mother_name,
+        isimp: $isimp,
+        notes: $notes
+    })
+    return p
+""", {
+    "name": person.name,
+    "gender": person.gender,
+    "father_name": person.father_name,
+    "grandfather_name": person.grandfather_name,
+    "mother_name": person.mother_name,
+    "isimp": person.isimp,
+    "notes": person.notes
+})
+
+
 
             created = result.single()["p"]
 
@@ -187,7 +192,7 @@ class Mutation:
             if person.id:
                 match_query = """
                     MATCH (p:Person)
-                    WHERE toLower(p.id) = toLower($id)
+                    WHERE toLower(toString(p.id)) = toLower($id)
                     RETURN p
                 """
                 params = {"id": person.id}
@@ -214,7 +219,7 @@ class Mutation:
 
             child_check = session.run("""
                 MATCH (p:Person)<-[:SON_OF|DAUGHTER_OF]-(c:Person)
-                WHERE toLower(p.id) = toLower($id)
+                WHERE toLower(toString(p.id)) = toLower($id)
                 RETURN count(c) as child_count
             """, {"id": person_id})
 
@@ -223,7 +228,7 @@ class Mutation:
 
             delete_result = session.run("""
                 MATCH (p:Person)
-                WHERE toLower(p.id) = toLower($id)
+                WHERE toLower(toString(p.id)) = toLower($id)
                 DETACH DELETE p
                 RETURN COUNT(*) AS deleted
             """, {"id": person_id})

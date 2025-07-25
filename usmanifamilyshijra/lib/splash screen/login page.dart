@@ -35,7 +35,6 @@ class _LoginPageState extends State<LoginPage> {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         final token = json['access_token'];
-        debugPrint('✅ login successful, token: $token');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt', token);
         await prefs.setString('jwt', token);
