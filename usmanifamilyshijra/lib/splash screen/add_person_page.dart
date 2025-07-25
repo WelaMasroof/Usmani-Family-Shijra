@@ -32,6 +32,8 @@ class _AddPersonPageState extends State<AddPersonPage> {
   final _fatherNameController = TextEditingController();
   final _grandfatherNameController = TextEditingController();
   final _motherNameController = TextEditingController();
+  final _notesController = TextEditingController();
+  String importantStatus = 'no';
 
   String gender = 'male';
   bool _isSubmitting = false;
@@ -167,6 +169,26 @@ class _AddPersonPageState extends State<AddPersonPage> {
                           controller: _motherNameController,
                           decoration: const InputDecoration(labelText: "Mother's Name (optional)"),
                         ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(labelText: "Important Person"),
+                          value: importantStatus,
+                          items: const [
+                            DropdownMenuItem(value: 'no', child: Text('No')),
+                            DropdownMenuItem(value: 'yes', child: Text('Yes')),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) setState(() => importantStatus = value);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _notesController,
+                          decoration: const InputDecoration(labelText: "Notes (optional)"),
+                          minLines: 1,
+                          maxLines: null, // no limit, auto-expand
+                          keyboardType: TextInputType.multiline,
+                        ),
                         const SizedBox(height: 20),
                         ElevatedButton(
                           onPressed: _isSubmitting
@@ -183,8 +205,11 @@ class _AddPersonPageState extends State<AddPersonPage> {
                                   "motherName": _motherNameController.text.isNotEmpty
                                       ? _motherNameController.text
                                       : null,
+                                  "notes": _notesController.text.isNotEmpty ? _notesController.text : null,
+                                  "isimp": importantStatus == 'yes',
                                 }
                               });
+
                             }
                           },
                           child: _isSubmitting
@@ -209,6 +234,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
     _fatherNameController.dispose();
     _grandfatherNameController.dispose();
     _motherNameController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 }
