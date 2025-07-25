@@ -176,13 +176,23 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
     final person = personMap[norm];
     final isImportant = person?.isimp ?? false;
 
-    // True size difference
-    final double boxWidth = isImportant ? 155 : 140;
-    final double fontSize = isImportant ? 14 : 13;
-    final double iconSize = isImportant ? 26 : 24;
-    final double paddingVertical = isImportant ? 8 : 6;
-    final double scaleFactor = isImportant ? 1.2 : 1.0;
+    // unified sizing
+    const double boxWidth = 155;
+    const double fontSize = 16;
+    const double paddingVertical = 8;
+    const double scaleFactor = 1.2;
 
+    // color logic
+    Color nodeColor;
+    if (pathToRoot.contains(norm)) {
+      nodeColor = Colors.green.shade300;
+    } else if (isImportant) {
+      nodeColor = Colors.blue;
+    } else if (isChild) {
+      nodeColor = Colors.yellow.shade300;
+    } else {
+      nodeColor = Colors.yellow.shade300;
+    }
 
     return GestureDetector(
       onLongPress: () {
@@ -205,22 +215,18 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
       child: AnimatedBuilder(
         animation: controller ?? AnimationController(vsync: this),
         builder: (ctx, child) => Transform.scale(
-          scale: (controller?.value ?? 1.0) * scaleFactor,  // Applying scale here
+          scale: (controller?.value ?? 1.0) * scaleFactor,
           child: child,
         ),
         child: Container(
           key: key,
           padding: EdgeInsets.symmetric(horizontal: 8, vertical: paddingVertical),
           decoration: BoxDecoration(
-            color: pathToRoot.contains(norm)
-                ? Colors.green.shade300
-                : isChild
-                ? Colors.lightBlue.shade100
-                : Colors.yellow.shade300,
+            color: nodeColor,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: norm == highlightedName ? Colors.transparent : Colors.transparent,  // No red border
-              width: norm == highlightedName ? 2 : 0,
+              color: norm == highlightedName ? Colors.red : Colors.transparent,
+              width: norm == highlightedName ? 2 : 2,
             ),
             boxShadow: [BoxShadow(blurRadius: 3, color: Colors.grey.shade400)],
           ),
@@ -229,11 +235,15 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
             children: [
               const SizedBox(height: 5),
               SizedBox(
-                width: 150,
+                width: boxWidth,
                 child: Text(
                   name,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: fontSize,
+                    color: Colors.black, // same for all
+                  ),
                 ),
               ),
             ],
@@ -242,10 +252,7 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
       ),
     );
   }
-
-
-
-
+  
   void _highlightChildren(String parent) {
     if (_treeMap.containsKey(parent)) {
       for (var c in _treeMap[parent]!) {
@@ -512,7 +519,8 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
 
       await Printing.layoutPdf(onLayout: (_) async => pdf.save());
     } catch (e) {
-      debugPrint("Error exporting PDF: $e");
+
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to export PDF')),
       );
