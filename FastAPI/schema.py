@@ -17,6 +17,7 @@ class PersonInput:
     mother_name: Optional[str] = None
     isimp: bool
     notes: Optional[str] = ""
+    addedafter: Optional[str]
 
 @strawberry.input
 class DeletePersonInput:
@@ -31,9 +32,10 @@ class Person:
     father_name: Optional[str]
     grandfather_name: Optional[str]
     gender: str
-    mother_name: Optional[str]=""
+    mother_name: Optional[str] = ""
     isimp: Optional[bool]
-    notes: Optional[str]=""
+    notes: Optional[str] = ""
+    addedafter: Optional[str] = None
 
 @strawberry.type
 class Ancestor:
@@ -69,7 +71,8 @@ class Query:
                     gender=record["p"]["gender"],
                     mother_name=record["p"].get("mother_name"),
                     isimp=record["p"].get("isimp"),
-                    notes=record["p"].get("notes")
+                    notes=record["p"].get("notes"),
+                    addedafter=record["p"].get("notes")
                 )
                 for record in result
             ]
@@ -95,59 +98,46 @@ class Query:
                     father_name=node["n"].get("father_name"),
                     grandfather_name=node["n"].get("grandfather_name"),
                     mother_name=node["n"].get("mother_name")
+                    
                 )
                 for node in result
             ]
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    @strawberry.mutation(permission_classes=[IsAuthenticated]) 
     async def create_person(self, person: PersonInput) -> Person:
         with get_session() as session:
-            # check for exact same name and father
-            existing = session.run("""
-                match (p:Person)
-                where toLower(trim(p.name)) = toLower(trim($name))
-                  and toLower(trim(p.father_name)) = toLower(trim($father_name))
-                return p limit 1
-            """, {
-                "name": person.name,
-                "father_name": person.father_name
-            })
-
-            if existing.peek():
-                raise Exception("a person with this name and father already exists")
-
-            # validate father's existence
             father_result = session.run("""
-                match (f:Person)
-                where toLower(f.name) = toLower($father_name)
-                return f
+                MATCH (f:Person)
+                WHERE toLower(f.name) = toLower($father_name)
+                RETURN f
             """, {"father_name": person.father_name})
-
+            
             father_record = father_result.single()
             if not father_record:
-                raise Exception(f"father '{person.father_name}' not found")
+                raise Exception(f"Father '{person.father_name}' not found")
+            
+            father_node = father_record["f"]
+            actual_grandfather = father_node.get("father_name")
 
-            actual_grandfather = father_record["f"].get("father_name")
             if not actual_grandfather:
-                raise Exception(f"father '{person.father_name}' has no recorded father")
+                raise Exception(f"Father '{person.father_name}' has no recorded father")
             if actual_grandfather.lower() != person.grandfather_name.lower():
-                raise Exception(f"grandfather mismatch: expected '{actual_grandfather}', got '{person.grandfather_name}'")
+                raise Exception(f"Grandfather mismatch: Expected '{actual_grandfather}', got '{person.grandfather_name}'")
 
-            # similar name check (Levenshtein)
             similar_name_result = session.run("""
-                match (p:Person)
-                where toLower(p.father_name) = toLower($father_name)
-                return p.name as existing_name
+                MATCH (p:Person)
+                WHERE toLower(p.father_name) = toLower($father_name)
+                RETURN p.name AS existing_name
             """, {"father_name": person.father_name})
 
             for record in similar_name_result:
                 existing_name = record["existing_name"]
-                if Levenshtein.distance(person.name.lower(), existing_name.lower()) <= 2:
-                    raise Exception(f"a similar person '{existing_name}' already exists with the same father name")
+                distance = Levenshtein.distance(person.name.lower(), existing_name.lower())
+                if distance <= 2:
+                    raise Exception(f"A similar person '{existing_name}' already exists with the same father name")
 
-            # create person
             result = session.run("""
                 match (c:Counter {name: "person_id_counter"})
                 set c.value = c.value + 1
@@ -160,7 +150,8 @@ class Mutation:
                     grandfather_name: $grandfather_name,
                     mother_name: $mother_name,
                     isimp: $isimp,
-                    notes: $notes
+                    notes: $notes,
+                    addedafter: $addedafter
                 })
                 return p
             """, {
@@ -170,20 +161,24 @@ class Mutation:
                 "grandfather_name": person.grandfather_name,
                 "mother_name": person.mother_name,
                 "isimp": person.isimp,
-                "notes": person.notes
+                "notes": person.notes,
+                "addedafter": person.addedafter
             })
 
+
+
             created = result.single()["p"]
+
             relation = "SON_OF" if person.gender.lower() in ["male", "m"] else "DAUGHTER_OF"
             session.run(f"""
-                match (child:Person)
-                where toLower(child.name) = toLower($child_name)
-                match (father:Person)
-                where toLower(father.name) = toLower($father_name)
-                merge (child)-[:{relation}]->(father)
+                MATCH (child:Person)
+                WHERE toLower(child.name) = toLower($child_name)
+                MATCH (father:Person)
+                WHERE toLower(father.name) = toLower($father_name)
+                MERGE (child)-[:{relation}]->(father)
             """, {
                 "child_name": person.name,
-                "father_name": person.father_name
+                "father_name": person.father_name,
             })
 
             return Person(
@@ -202,51 +197,50 @@ class Mutation:
         with get_session() as session:
             if person.id:
                 match_query = """
-                    match (p:Person)
-                    where toLower(toString(p.id)) = toLower($id)
-                    return p
+                    MATCH (p:Person)
+                    WHERE toLower(toString(p.id)) = toLower($id)
+                    RETURN p
                 """
                 params = {"id": person.id}
             elif person.name and person.father_name:
                 match_query = """
-                    match (p:Person)
-                    where toLower(p.name) = toLower($name)
-                      and toLower(p.father_name) = toLower($father_name)
-                    return p
+                    MATCH (p:Person)
+                    WHERE toLower(p.name) = toLower($name)
+                      AND toLower(p.father_name) = toLower($father_name)
+                    RETURN p
                 """
                 params = {
                     "name": person.name,
                     "father_name": person.father_name
                 }
             else:
-                raise Exception("provide either id or both name and father_name to delete the person")
+                raise Exception("Provide either id OR both name and father_name to delete the person.")
 
             match_result = session.run(match_query, params).single()
             if not match_result:
-                raise Exception("no matching person found to delete")
+                raise Exception("No matching person found to delete.")
 
             person_node = match_result["p"]
             person_id = person_node["id"]
 
             child_check = session.run("""
-                match (p:Person)<-[:SON_OF|DAUGHTER_OF]-(c:Person)
-                where toLower(toString(p.id)) = toLower($id)
-                return count(c) as child_count
+                MATCH (p:Person)<-[:SON_OF|DAUGHTER_OF]-(c:Person)
+                WHERE toLower(toString(p.id)) = toLower($id)
+                RETURN count(c) as child_count
             """, {"id": person_id})
 
             if child_check.single()["child_count"] > 0:
-                raise Exception("cannot delete this person because they have children")
+                raise Exception("Cannot delete this person because they have children.")
 
             delete_result = session.run("""
-                match (p:Person)
-                where toLower(toString(p.id)) = toLower($id)
-                detach delete p
-                return count(*) as deleted
+                MATCH (p:Person)
+                WHERE toLower(toString(p.id)) = toLower($id)
+                DETACH DELETE p
+                RETURN COUNT(*) AS deleted
             """, {"id": person_id})
 
             if delete_result.single()["deleted"] == 0:
-                raise Exception("deletion failed")
-
-            return "person deleted successfully"
+                raise Exception("Deletion failed.")
+            return "Person deleted successfully."
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
