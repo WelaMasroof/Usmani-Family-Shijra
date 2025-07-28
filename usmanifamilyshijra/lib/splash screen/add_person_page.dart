@@ -33,6 +33,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
   final _grandfatherNameController = TextEditingController();
   final _motherNameController = TextEditingController();
   final _notesController = TextEditingController();
+  String addedafter = 'no';
   String importantStatus = 'no';
 
   String gender = 'male';
@@ -70,6 +71,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
                 _fatherNameController.clear();
                 _grandfatherNameController.clear();
                 _motherNameController.clear();
+
               }
             },
             child: const Text('OK'),
@@ -182,6 +184,18 @@ class _AddPersonPageState extends State<AddPersonPage> {
                           },
                         ),
                         const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(labelText: "Added After"),
+                          value: addedafter ,
+                          items: const [
+                            DropdownMenuItem(value: 'no', child: Text('No')),
+                            DropdownMenuItem(value: 'yes', child: Text('Yes')),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) setState(() => addedafter = value);
+                          },
+                        ),
+                        const SizedBox(height: 12),
                         TextFormField(
                           controller: _notesController,
                           decoration: const InputDecoration(labelText: "Notes (optional)"),
@@ -207,6 +221,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
                                       : null,
                                   "notes": _notesController.text.isNotEmpty ? _notesController.text : null,
                                   "isimp": importantStatus == 'yes',
+                                  "addedafter": addedafter,
                                 }
                               });
 

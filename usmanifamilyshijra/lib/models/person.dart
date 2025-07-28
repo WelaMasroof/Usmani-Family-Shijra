@@ -6,6 +6,7 @@ class Person {
   final String grandfatherName;
   final String notes;
   bool isimp;
+  final String addedAfter; // new field
   final List<String> children;
 
   Person({
@@ -16,6 +17,7 @@ class Person {
     required this.grandfatherName,
     required this.notes,
     required this.isimp,
+    required this.addedAfter, // constructor update
     this.children = const [],
   });
 
@@ -28,6 +30,7 @@ class Person {
       grandfatherName: json['grandfatherName'] ?? '',
       notes: json['notes'] ?? '',
       isimp: json['isimp'] ?? false,
+      addedAfter: json['addedAfter'] ?? '', // parse new field
       children: (json['children'] is List)
           ? List<String>.from(json['children'] ?? [])
           : [],

@@ -304,11 +304,12 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _tooltipRow('ID', p.id),
                 _tooltipRow('Name', p.name),
                 _tooltipRow('Father', p.fatherName),
                 _tooltipRow('Grandfather', p.grandfatherName),
                 _tooltipRow('Mother', p.motherName),
-                _tooltipRow('ID', p.id),
+                _tooltipRow("Added After", p.addedAfter),
                 if (p.notes.isNotEmpty) _tooltipRow('Notes', p.notes),
                 _tooltipRow('Important', p.isimp ? 'Yes' : 'No', isHighlight: p.isimp),
                 const SizedBox(height: 6),

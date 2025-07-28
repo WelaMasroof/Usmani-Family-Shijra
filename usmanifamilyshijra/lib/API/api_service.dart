@@ -17,6 +17,7 @@ class ApiService {
           grandfatherName
           notes
           isimp
+          addedafter
         }
       }
     ''';
