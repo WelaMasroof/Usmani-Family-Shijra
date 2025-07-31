@@ -7,9 +7,11 @@ import 'package:graphview/GraphView.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import '../splash screen/Contact Page.dart';
 import '../API/api_service.dart';
 import '../models/person.dart';
 import '../splash screen/About Page.dart';
+import '../splash screen/about2 screen.dart';
 import 'package:image/image.dart' as img;
 
 
@@ -617,13 +619,35 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.info),
-                    title: const Text('About'),
+                    leading: const Icon(Icons.bookmark),
+                    title: const Text('دیباچہ'),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const AboutPage()),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.info),
+                    title: const Text('دوسرا قدم'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const UrduShijraScreen()),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.contact_page),
+                    title: const Text('Contact'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const Contact()),
                       );
                     },
                   ),

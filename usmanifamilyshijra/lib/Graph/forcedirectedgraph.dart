@@ -10,6 +10,8 @@ import 'package:printing/printing.dart';
 import '../API/api_service.dart';
 import '../models/person.dart';
 import '../splash screen/About Page.dart';
+import '../splash screen/Contact Page.dart';
+import '../splash screen/about2 screen.dart';
 import '../splash screen/login page.dart';
 import 'package:image/image.dart' as img;
 
@@ -617,7 +619,6 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                     },
                   ),
 
-
                   if (_isAdmin) ...[
                     ListTile(
                       leading: const Icon(Icons.group_add),
@@ -637,13 +638,35 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
                     ),
 
                     ListTile(
-                      leading: const Icon(Icons.info),
-                      title: const Text('About'),
+                      leading: const Icon(Icons.bookmark),
+                      title: const Text('دیباچہ'),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const AboutPage()),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.info),
+                      title: const Text('دوسرا قدم'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const UrduShijraScreen()),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.contact_page),
+                      title: const Text('Contact'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const Contact()),
                         );
                       },
                     ),

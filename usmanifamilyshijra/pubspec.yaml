@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^0.13.6
+  url_launcher: ^6.2.5
   shared_preferences: ^2.2.2
   graphql_flutter: ^5.1.2
   graphview: ^1.1.0
@@ -39,8 +40,16 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/family_tree.png
+  fonts:
+    - family: NotoNastaliqUrdu
+      fonts:
+        - asset: assets/fonts/Jameel Noori Nastaleeq Regular.ttf
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
 
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icons/family_tree.png"
+

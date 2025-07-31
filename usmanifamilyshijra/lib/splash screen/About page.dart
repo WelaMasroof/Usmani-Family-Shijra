@@ -6,31 +6,18 @@ class AboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'About This App',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'ysbicchbdbhbcds'
-                    'You can add people, link them with parents or children, and view their notes. '
-                    'It is built with Flutter and Neo4j as the backend graph database. '
-                    'This app aims to preserve family heritage across generations with simplicity and accessibility.',
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 20),
-              Text(
-                'Developed by UsmaiFamily',
-                style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
-              ),
-            ],
+      appBar: AppBar(title: const Text('دیباچہ'),centerTitle: true),
+      body: const SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Text(
+            '''
+مخدوم زادگان پانی پت کا نسب نامہ سب سے پہلے حضرت قاضی محمد ثناء اللہ صاحب محدث مظہری نے موجودہ صورت میں مرتب کیا۔ جب یہ بوسیدہ ہو گیا تو پیر بوعلی بخش نے اس کی دو نقلیں تیار کیں؛ ایک درگاہ شریف میں رکھ دی، دوسری اپنے گھر رکھ لی، اور اصل وارثان قاضی محمد ثناء اللہ محدث کو پیش کر دی، جو ایک دریدہ صورت میں قاضی عطاء اللہ کے پاس در لیالی میں موجود ہے۔ ایک نقل جو پیر بوعلی بخش نے گھر میں رکھی تھی، وہ پیر محمد صبغت اللہ کے پاس ملتان میں ہے۔ جو نقل درگاہ میں رکھی ہوئی ہے، وہ اصل شمار ہوتی تھی۔ دستور یہ تھا کہ جب حضرت جدا مجد مخدوم شیخ جلال الدین کبیر الاولیاء کی اولاد میں کوئی لڑکا پیدا ہوتا تھا تو بعد از نماز جمعہ لڑکے کا بزرگ تمام برادری کو سہ دری پیش درگاہ میں جمع کرتا تھا اور ایک گڑ کی ڈلی پیش کرتا، حاضرین میں سے سب سے بزرگ، شجرہ میں نومولود کا نام لکھتا تھا اور وہ گڑ حاضرین میں تقسیم ہو جاتا تھا۔ بربادی پانی پت کے وقت حافظ زیب اکبر یہ شجرہ اور درگاہ شریف کی منقولہ کاغذات اپنے ساتھ لے آئے اور حافظ آباد ضلع گوجرانوالہ میں فوت ہو گئے۔ اب یہ اشیاء مع شجرۂ نسب کے ان کے سب سے چھوٹے لڑکے محد معظم کے پاس ہے۔ 
+اللہ کا شکر ہے کہ میرے پاس آل عدنان اور آل سیدنا ابو ایوب انصاری کا شجرۂ نسب مکمل وجود میں ہے اور اب برادر محترم مولوی محمد سلیم عثمانی ناظم مدرسہ صولتیہ مکہ مکرمہ کی خواہش پر اس شجرہ کی نقل ارسال کر رہا ہوں۔ یہ اللہ تعالیٰ کا احسان ہے کہ اس بہانے سے تمام قبیلہ کے نام اس مقدس شہر کے دفتر میں محفوظ ہو گئے ہیں۔ (تمت بالخیر)
+ — احقر محمد مسیح اللہ عفی اللہ عنہ
+  ۱-۵-۶۵ ''',
+            style: TextStyle(fontSize: 18, height: 1.8),
           ),
         ),
       ),
