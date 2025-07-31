@@ -49,7 +49,8 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
       ..subtreeSeparation = 25
       ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
 
-    _transformationController.value = Matrix4.identity()..scale(0.7);
+    _transformationController.value = Matrix4.identity()
+      ..scale(0.2);             // 50% zoom on load
     _checkIfAdmin().then((_) => loadGraph());
   }
 
@@ -688,7 +689,7 @@ class _GraphPageState extends State<FamilyTreeGraph> with TickerProviderStateMix
             boundaryMargin: const EdgeInsets.all(100),
             minScale: 0.1,
             maxScale: 10,
-            scaleEnabled: false, // 👉 disable pinch-to-zoom
+            scaleEnabled: true, // 👉 disable pinch-to-zoom
             child: RepaintBoundary(
               key: _previewContainer,
               child: graph.nodes.isEmpty
