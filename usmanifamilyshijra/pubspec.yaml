@@ -40,13 +40,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/family_tree.png
-  fonts:
-    - family: NotoNastaliqUrdu
-      fonts:
-        - asset: assets/fonts/Jameel Noori Nastaleeq Regular.ttf
-    - family: Roboto
-      fonts:
-        - asset: assets/fonts/Roboto-Regular.ttf
 
 flutter_launcher_icons:
   android: true
