@@ -610,14 +610,7 @@ class _GraphPageState extends State<GraphPage> with TickerProviderStateMixin {
                       if (res != null) _searchAndHighlight(res);
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.print),
-                    title: const Text('Export as PDF'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _exportGraphAsPdf();
-                    },
-                  ),
+
                   ListTile(
                     leading: const Icon(Icons.bookmark),
                     title: const Text('دیباچہ'),
